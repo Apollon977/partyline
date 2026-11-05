@@ -137,6 +137,8 @@ To add a team, rotate a token or remove a team, edit `TEAMS` and run `docker com
 
 ### Deployment targets
 
+Both targets run the same core; choose at deploy time.
+
 | Target | Best for |
 |---|---|
 | **Docker** (above) | The standard way: any machine or container platform |
