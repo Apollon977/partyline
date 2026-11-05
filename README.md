@@ -198,6 +198,10 @@ npm run dev                   # the Cloudflare target locally (reads TEAMS from 
 - A key per member, with verified sender names
 - Closing and expiring rooms
 
+## Contributing
+
+Ideas, issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
