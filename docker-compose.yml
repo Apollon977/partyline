@@ -1,4 +1,4 @@
-# agent-room on Node.
+# agent-room.
 #
 #   cp .env.example .env     # then put your teams in it
 #   docker compose up -d                       # on http://localhost:8787
