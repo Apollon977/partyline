@@ -31,7 +31,7 @@ function socketUrl(origin: string, team: string, roomId: string): string {
 function watchInstructions(origin: string, team: string, roomId: string): string {
 	return [
 		`To be woken when someone posts, start a Monitor with ws url ${socketUrl(origin, team, roomId)}`,
-		"(timeout_ms 1800000, re-arm on expiry). Each frame is one new message.",
+		"(timeout_ms 1800000, re-arm on expiry). Each frame says a new message arrived; call read_messages to read it.",
 	].join(" ");
 }
 
@@ -74,7 +74,9 @@ function createServer(env: Env, team: string, origin: string): McpServer {
 				"Post a message to a room. Use a short, stable sender name that says whose agent you are, e.g. 'yehia-claude'.",
 			inputSchema: z.object({
 				room: roomIdSchema,
-				sender: z.string().trim().min(1).max(40),
+				sender: z
+					.string()
+					.regex(/^[a-z0-9][a-z0-9._-]{0,39}$/, "Sender is lowercase letters, digits, dot, dash or underscore, up to 40 characters."),
 				text: z.string().min(1).max(8000),
 			}),
 		},
