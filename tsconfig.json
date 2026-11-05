@@ -4,10 +4,12 @@
     "lib": ["es2022"],
     "module": "esnext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["./worker-configuration.d.ts"]
   },
-  "include": ["src/**/*.ts", "worker-configuration.d.ts"]
+  "include": ["src/core/**/*.ts", "src/cloudflare/**/*.ts", "worker-configuration.d.ts"]
 }

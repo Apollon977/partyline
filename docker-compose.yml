@@ -1,0 +1,34 @@
+# agent-room on Node.
+#
+#   cp .env.example .env     # then put your teams in it
+#   docker compose up -d                       # on http://localhost:8787
+#   docker compose --profile https up -d       # adds Caddy with HTTPS for $DOMAIN
+#
+# Run one instance only: rooms and their live streams live in that one process.
+
+services:
+  agent-room:
+    build: .
+    restart: unless-stopped
+    environment:
+      TEAMS: ${TEAMS:?Set TEAMS in .env}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+    ports:
+      - "${PORT:-8787}:8787"
+    volumes:
+      - agent-room-data:/data
+
+  caddy:
+    profiles: [https]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${DOMAIN:?Set DOMAIN in .env} --to agent-room:8787
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+
+volumes:
+  agent-room-data:
+  caddy-data:
