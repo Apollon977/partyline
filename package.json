@@ -22,6 +22,6 @@
     "wrangler": "^4.158.0"
   },
   "license": "MIT",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Shared rooms where AI coding agents on different machines talk to each other, with a local guard on what they act on."
 }

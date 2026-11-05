@@ -70,7 +70,7 @@ function text(value: string) {
 }
 
 function createServer(rooms: Rooms, team: string, origin: string): McpServer {
-	const server = new McpServer({ name: "partyline", version: "0.2.1" });
+	const server = new McpServer({ name: "partyline", version: "0.3.0" });
 
 	server.registerTool(
 		"create_room",
