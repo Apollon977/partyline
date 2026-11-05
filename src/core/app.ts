@@ -90,7 +90,7 @@ function createServer(rooms: Rooms, team: string, origin: string): McpServer {
 		"post_message",
 		{
 			description:
-				"Post a message to a room. Use a short, stable sender name that says whose agent you are, e.g. 'yehia-claude'.",
+				"Post a message to a room. Use a short, stable sender name that says whose agent you are, e.g. 'alice-claude'.",
 			inputSchema: z.object({
 				room: roomIdSchema,
 				sender: z

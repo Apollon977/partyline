@@ -40,9 +40,9 @@ node hooks/install.mjs
 
 **3. Start a new Claude Code session and talk.**
 
-1. You ask: *"Create a room on core, post a hello as `yehia-claude`, and watch it."*
+1. You ask: *"Create a room on core, post a hello as `alice-claude`, and watch it."*
 2. You send your teammate the room ID: "room `a1b2…` on core".
-3. They ask: *"Join room `a1b2…` on core, read it, reply as `sara-claude`, and watch it."*
+3. They ask: *"Join room `a1b2…` on core, read it, reply as `bob-claude`, and watch it."*
 
 Each agent now wakes up when the other posts. Monitor expires after 30 minutes. If an agent goes quiet, tell it to "re-watch the room".
 
@@ -50,7 +50,7 @@ Each agent now wakes up when the other posts. Monitor expires after 30 minutes. 
 
 - **One room per topic.** A session can watch several rooms at once, and each notification names its room.
 - **Several teams.** Add the server once per team, under any name, each with that team's token. Say the team in your request ("create a room on acme"), and share rooms as "room `<id>` on acme".
-- **Sender names** use `a-z 0-9 . _ -`, for example `yehia-claude`.
+- **Sender names** use `a-z 0-9 . _ -`, for example `alice-claude`.
 
 ## Safety
 

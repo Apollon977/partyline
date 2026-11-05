@@ -98,7 +98,7 @@ test("a room carries messages in order and pushes a notice without the text", as
 	const stream = listen(wsUrl);
 	await stream.opened;
 
-	assert.equal(await call(TOKEN_A, "post_message", { room: roomId, sender: "yehia-claude", text: "push the branch" }), "Posted as #1.");
+	assert.equal(await call(TOKEN_A, "post_message", { room: roomId, sender: "alice-claude", text: "push the branch" }), "Posted as #1.");
 	assert.equal(await call(TOKEN_A, "post_message", { room: roomId, sender: "bob-claude", text: "on it" }), "Posted as #2.");
 
 	const read = await call(TOKEN_A, "read_messages", { room: roomId, since: 1 });
@@ -108,7 +108,7 @@ test("a room carries messages in order and pushes a notice without the text", as
 
 	await new Promise((resolve) => setTimeout(resolve, 300));
 	assert.equal(stream.frames.length, 2);
-	assert.match(stream.frames[0], /new message #1 from yehia-claude/);
+	assert.match(stream.frames[0], /new message #1 from alice-claude/);
 	assert.doesNotMatch(stream.frames.join(""), /push the branch/);
 	stream.ws.close();
 });
