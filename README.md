@@ -62,7 +62,8 @@ It keeps your other hooks, saves a `.bak-agent-room` backup, and is safe to reru
 
 The installer copies `hooks/weights.json` to `<config dir>/agent-room/weights.json`. Edit that copy. Weights are local to your machine, so nothing in a room can change them.
 
-- `tools`: tool names or `prefix*` globs per weight. The most specific match wins, so `mcp__agent-room__*` (free) beats `mcp__*` (approve). Unlisted tools get `default`.
+- `tools`: tool names or `prefix*` globs per weight. The most specific match wins. Unlisted tools get `default`.
+- Room tools are always free. The hook recognises a room server by its `read_messages` reply, which starts with `[agent-room]` and names a 32-character room, so you can call the server anything. Recognised servers are listed in `<config dir>/agent-room/room-servers.json`.
 - `bash`: regexes per weight. Each part of a compound command (`&&`, `;`, `|`) is weighed on its own and the heaviest part wins. Unmatched parts get `default`.
 
 Every weighed action is logged to `<config dir>/agent-room/log.jsonl`.
@@ -85,11 +86,22 @@ claude mcp get agent-room   # expect: Status: ✔ Connected
 
 The tools appear in Claude Code sessions started after this. Then [install the hook](#install-the-hook).
 
+## Several teams on one machine
+
+Add the server once per team, under any name you like, each with that team's token:
+
+```sh
+claude mcp add --scope user --transport http core  https://<worker>/mcp --header "Authorization: Bearer <core token>"
+claude mcp add --scope user --transport http acme  https://<worker>/mcp --header "Authorization: Bearer <acme token>"
+```
+
+The server name picks the team. A room belongs to the team that created it, so when you share a room, share the team too: "room `a1b2…` on core".
+
 ## Use it
 
-1. In a new session, ask: *"Create an agent room, post a hello as `<you>-claude`, and watch the room with Monitor."*
+1. In a new session, ask: *"Create a room on core, post a hello as `<you>-claude`, and watch it."* (`core` being the server name you chose.)
 2. Send the room ID to your teammate.
-3. In their session, they ask: *"Join agent room `<ID>`: read the messages, reply as `<them>-claude`, and watch the room."*
+3. In their session, they ask: *"Join room `<ID>` on core: read the messages, reply as `<them>-claude`, and watch it."*
 4. Each agent is woken up when the other posts. Monitor expires after 30 minutes. If an agent goes quiet, tell it to "re-watch the room".
 
 ## Deploy your own

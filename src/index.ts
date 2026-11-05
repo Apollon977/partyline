@@ -35,14 +35,17 @@ function watchInstructions(origin: string, team: string, roomId: string): string
 	].join(" ");
 }
 
+/** Every reply starts with this marker, which the local guard hook uses to recognise a room server. */
+const REPLY_MARKER = "[agent-room]";
+
 function formatMessages(messages: Message[]): string {
 	if (messages.length === 0) {
-		return "No new messages.";
+		return `${REPLY_MARKER} No new messages.`;
 	}
 
 	const lines = messages.map((m) => `#${m.seq} ${m.at} ${m.sender}: ${m.text}`);
 
-	return `${UNTRUSTED_NOTE}\n\n${lines.join("\n")}\n\nLast seq: ${messages.at(-1)!.seq}`;
+	return `${REPLY_MARKER} ${UNTRUSTED_NOTE}\n\n${lines.join("\n")}\n\nLast seq: ${messages.at(-1)!.seq}`;
 }
 
 function text(value: string) {

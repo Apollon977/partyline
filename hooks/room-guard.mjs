@@ -3,7 +3,8 @@
  * agent-room guard: a Claude Code hook that weighs actions taken while a session is
  * acting on instructions from an agent room.
  *
- *   PostToolUse  (read_messages) → mark the session as instructed by a room
+ *   PostToolUse  (read_messages) → if the reply is a room's, remember that server as a room
+ *                                  server and mark the session as instructed by a room
  *   UserPromptSubmit             → the operator spoke: clear the mark
  *   PreToolUse   (every tool)    → if marked, apply the action's weight:
  *                                    free    → run as usual
@@ -28,6 +29,33 @@ const NOT_THE_OPERATOR = [/<task-notification/i, /\[agent-room /, /<cross-sessio
 const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
 const stateDir = join(configDir, "agent-room");
 const marksDir = join(stateDir, "instructed");
+const roomServersFile = join(stateDir, "room-servers.json");
+
+/** A room server's read_messages reply starts with this marker, whatever the server is named locally. */
+const REPLY_MARKER = "[agent-room]";
+const ROOM_ID = /^[0-9a-f]{32}$/;
+
+function replyText(response) {
+	const content = Array.isArray(response) ? response : (response?.content ?? []);
+	if (typeof response === "string") {
+		return response;
+	}
+
+	return content.map((part) => part?.text ?? "").join("");
+}
+
+function roomServers() {
+	try {
+		return JSON.parse(readFileSync(roomServersFile, "utf8"));
+	} catch {
+		return [];
+	}
+}
+
+/** The server part of an MCP tool name: mcp__<server>__<tool>. */
+function serverOf(toolName) {
+	return toolName.match(/^mcp__(.+)__[^_].*$/)?.[1] ?? null;
+}
 
 function readInput() {
 	try {
@@ -52,8 +80,16 @@ function higher(a, b) {
 	return TIERS.indexOf(a) >= TIERS.indexOf(b) ? a : b;
 }
 
-/** The most specific pattern wins: an exact name beats a glob, a longer glob beats a shorter one. */
+/**
+ * A known room server's own tools are free. Otherwise the most specific pattern wins:
+ * an exact name beats a glob, a longer glob beats a shorter one.
+ */
 function weighTool(name, tools) {
+	const server = serverOf(name);
+	if (server && roomServers().includes(server)) {
+		return "free";
+	}
+
 	let best = { length: -1, tier: tools.default ?? "approve" };
 	for (const tier of TIERS) {
 		for (const pattern of tools[tier] ?? []) {
@@ -123,7 +159,17 @@ mkdirSync(marksDir, { recursive: true });
 
 switch (input.hook_event_name) {
 	case "PostToolUse": {
-		const room = input.tool_input?.room ?? "";
+		const room = String(input.tool_input?.room ?? "");
+		const server = serverOf(input.tool_name ?? "");
+		if (!server || !ROOM_ID.test(room) || !replyText(input.tool_response).trimStart().startsWith(REPLY_MARKER)) {
+			break;
+		}
+
+		const known = roomServers();
+		if (!known.includes(server)) {
+			writeFileSync(roomServersFile, JSON.stringify([...known, server]));
+			log({ event: "room-server", server });
+		}
 		writeFileSync(markFile(sessionId), JSON.stringify({ room, at: new Date().toISOString() }));
 		log({ session: sessionId, event: "instructed", room });
 		break;

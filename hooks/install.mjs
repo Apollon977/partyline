@@ -24,7 +24,7 @@ const targets = files.length ? files.map((file) => resolve(file)) : [join(config
 
 const entries = {
 	PreToolUse: { matcher: "*", hooks: [{ type: "command", command, timeout: 10 }] },
-	PostToolUse: { matcher: "mcp__agent-room__read_messages", hooks: [{ type: "command", command, timeout: 10 }] },
+	PostToolUse: { matcher: "^mcp__.+__read_messages$", hooks: [{ type: "command", command, timeout: 10 }] },
 	UserPromptSubmit: { hooks: [{ type: "command", command, timeout: 10 }] },
 };
 

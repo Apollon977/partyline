@@ -3,7 +3,7 @@
     "default": "approve",
     "free": [
       "Read", "Grep", "Glob", "LS", "LSP", "WebFetch", "WebSearch", "TodoWrite", "ToolSearch",
-      "Agent", "Task", "Skill", "Monitor", "TaskStop", "AskUserQuestion", "mcp__agent-room__*"
+      "Agent", "Task", "Skill", "Monitor", "TaskStop", "AskUserQuestion"
     ],
     "notify": ["Edit", "Write", "MultiEdit", "NotebookEdit"],
     "approve": ["mcp__*", "Artifact", "SendMessage", "PushNotification", "RemoteTrigger", "CronCreate", "Workflow"]
