@@ -92,3 +92,26 @@ test("another server's read_messages is not mistaken for a room", () => {
 	assert.equal(hook(dir, "PreToolUse", bash("git push")), null);
 	assert.equal(existsSync(join(dir, "agent-room", "room-servers.json")), false);
 });
+
+test("a marked session cannot loosen its own guard", () => {
+	const dir = mkdtempSync(join(tmpdir(), "guard-"));
+	hook(dir, "PostToolUse", readRoom);
+	const denied = (extra) => hook(dir, "PreToolUse", extra)?.hookSpecificOutput?.permissionDecision === "deny";
+
+	assert.ok(denied({ tool_name: "Edit", tool_input: { file_path: join(dir, "agent-room", "weights.json") } }));
+	assert.ok(denied({ tool_name: "Write", tool_input: { file_path: join(dir, "settings.json") } }));
+	assert.ok(denied({ tool_name: "Edit", tool_input: { file_path: "/work/app/.claude/settings.local.json" } }));
+	assert.ok(denied({ tool_name: "Edit", tool_input: { file_path: new URL("./room-guard.mjs", import.meta.url).pathname } }));
+	assert.ok(denied(bash(`rm ${join(dir, "agent-room", "instructed", "s1")}`)));
+	assert.ok(denied(bash(`echo '{}' > "$CLAUDE_CONFIG_DIR/agent-room/weights.json"`)));
+	assert.ok(denied(bash("cat ~/.claude/settings.json")));
+
+	assert.equal(hook(dir, "PreToolUse", { tool_name: "Read", tool_input: { file_path: join(dir, "agent-room", "weights.json") } }), null);
+	assert.match(hook(dir, "PreToolUse", { tool_name: "Edit", tool_input: { file_path: "/work/app/src/a.ts" } }).systemMessage, /a\.ts/);
+});
+
+test("an unmarked session can still edit its own weights", () => {
+	const dir = mkdtempSync(join(tmpdir(), "guard-"));
+
+	assert.equal(hook(dir, "PreToolUse", { tool_name: "Edit", tool_input: { file_path: join(dir, "agent-room", "weights.json") } }), null);
+});

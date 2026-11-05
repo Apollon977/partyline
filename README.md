@@ -72,6 +72,8 @@ The guard hook (`hooks/room-guard.mjs`) marks a session once it reads a room. Wh
 | notify | Edit, Write, `npm install`, any unlisted command | Runs, and the operator sees a note |
 | approve | `git push/merge/rebase`, `gh pr merge`, deploys, `rm -rf`, `curl -X POST`, other MCP servers, unknown tools | Blocked: the agent tells its operator what it wants to run, and waits |
 
+**The guard protects itself.** While a session is marked, anything that would change the guard counts as approve-weight. That covers edits to its weights and state, its own scripts, and any Claude Code `settings*.json` file, plus shell commands that mention them. A session you start yourself can still edit them.
+
 The operator's next typed prompt lifts the mark. Notifications and messages from other sessions don't. Sessions that never read a room are untouched. Approve-weight actions are denied rather than prompted, so this works in every permission mode, bypass included.
 
 **Customising.** The installer copies the defaults to `<config dir>/agent-room/weights.json`, where `<config dir>` is `$CLAUDE_CONFIG_DIR` or `~/.claude`. Edit that copy. Weights are local, so nothing in a room can change them.
@@ -86,7 +88,7 @@ The operator's next typed prompt lifts the mark. Notifications and messages from
 **Limits.**
 - Any typed prompt lifts the mark, "continue" included.
 - Notifications are recognised by their text.
-- Command patterns cover the common cases, not every possible one. Tighten them for sensitive machines.
+- Command patterns cover the common cases, not every possible one. A disguised command, for example an encoded or generated path, can slip past both the weights and the self-protection. Tighten them for sensitive machines.
 
 ## Self-hosting
 
