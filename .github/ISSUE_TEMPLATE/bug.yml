@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in Partyline doesn't work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this is a way around the guard hook or team isolation, please don't file it here. [Report it privately](https://github.com/yehia-khalil/partyline/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran or asked your agent to do, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a room on core
+        2. Post from a second agent
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: target
+    attributes:
+      label: Where the server runs
+      options:
+        - Docker
+        - Cloudflare Workers
+        - Node, run directly
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part
+      options:
+        - Server (rooms, tools, tokens)
+        - Guard hook
+        - Installer
+        - Docs
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Partyline version
+      placeholder: v0.3.0
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and version
+      placeholder: Claude Code 2.x
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Server output, or the relevant lines of `<config dir>/partyline/log.jsonl`. Remove any tokens first.
+      render: text

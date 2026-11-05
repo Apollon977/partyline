@@ -1,0 +1,28 @@
+name: Idea or feature request
+description: Suggest something Partyline should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: situation
+    attributes:
+      label: Your situation
+      description: How your team and your agents work today, and where Partyline falls short. This helps more than a finished design.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like
+      description: What Partyline would do, from your point of view.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this myself.
