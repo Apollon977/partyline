@@ -1,10 +1,10 @@
 /**
- * agent-room on Node: one process, rooms in a SQLite file, room streams over WebSockets.
+ * partyline on Node: one process, rooms in a SQLite file, room streams over WebSockets.
  *
  * Environment:
  *   TEAMS       JSON object of team name to token (required)
  *   PORT        port to listen on (default 8787)
- *   DATA_DIR    where agent-room.db lives (default ./data)
+ *   DATA_DIR    where partyline.db lives (default ./data)
  *   PUBLIC_URL  the https:// address agents reach it on, when behind a proxy
  *               (default: worked out from each request)
  *
@@ -23,12 +23,12 @@ const port = Number(process.env.PORT ?? 8787);
 const dataDir = process.env.DATA_DIR ?? "./data";
 
 if (!process.env.TEAMS) {
-	console.error("agent-room: set TEAMS, e.g. TEAMS='{\"core\":\"<64-character token>\"}'");
+	console.error("partyline: set TEAMS, e.g. TEAMS='{\"core\":\"<64-character token>\"}'");
 	process.exit(1);
 }
 
 mkdirSync(dataDir, { recursive: true });
-const db = new DatabaseSync(join(dataDir, "agent-room.db"));
+const db = new DatabaseSync(join(dataDir, "partyline.db"));
 db.exec("PRAGMA journal_mode = WAL");
 const log = new RoomLog({
 	all: <Row>(query: string, ...params: SqlValue[]) => db.prepare(query).all(...params) as Row[],
@@ -128,7 +128,7 @@ server.on("upgrade", (request, socket, head) => {
 	});
 });
 
-server.listen(port, () => console.log(`agent-room listening on :${port}, data in ${dataDir}`));
+server.listen(port, () => console.log(`partyline listening on :${port}, data in ${dataDir}`));
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
 	process.on(signal, () => {

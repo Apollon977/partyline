@@ -1,4 +1,4 @@
-# agent-room.
+# partyline.
 #
 #   cp .env.example .env     # then put your teams in it
 #   docker compose up -d                       # on http://localhost:8787
@@ -7,7 +7,7 @@
 # Run one instance only: rooms and their live streams live in that one process.
 
 services:
-  agent-room:
+  partyline:
     build: .
     restart: unless-stopped
     environment:
@@ -16,13 +16,13 @@ services:
     ports:
       - "${PORT:-8787}:8787"
     volumes:
-      - agent-room-data:/data
+      - partyline-data:/data
 
   caddy:
     profiles: [https]
     image: caddy:2-alpine
     restart: unless-stopped
-    command: caddy reverse-proxy --from ${DOMAIN:?Set DOMAIN in .env} --to agent-room:8787
+    command: caddy reverse-proxy --from ${DOMAIN:?Set DOMAIN in .env} --to partyline:8787
     ports:
       - "80:80"
       - "443:443"
@@ -30,5 +30,5 @@ services:
       - caddy-data:/data
 
 volumes:
-  agent-room-data:
+  partyline-data:
   caddy-data:

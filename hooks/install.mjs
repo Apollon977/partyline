@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Adds the agent-room guard hook to a Claude Code settings file, and copies the default
- * weights to <config dir>/agent-room/weights.json if there are none yet.
+ * Adds the partyline guard hook to a Claude Code settings file, and copies the default
+ * weights to <config dir>/partyline/weights.json if there are none yet.
  *
  *   node hooks/install.mjs [settings.json ...]          install (default: $CLAUDE_CONFIG_DIR or ~/.claude)
  *   node hooks/install.mjs --uninstall [settings.json ...]
@@ -33,7 +33,7 @@ const isOurs = (group) => (group.hooks ?? []).some((hook) => String(hook.command
 for (const target of targets) {
 	const settings = existsSync(target) ? JSON.parse(readFileSync(target, "utf8")) : {};
 	if (existsSync(target)) {
-		copyFileSync(target, `${target}.bak-agent-room`);
+		copyFileSync(target, `${target}.bak-partyline`);
 	}
 
 	settings.hooks ??= {};
@@ -51,7 +51,7 @@ for (const target of targets) {
 }
 
 if (!uninstall) {
-	const weights = join(configDir, "agent-room", "weights.json");
+	const weights = join(configDir, "partyline", "weights.json");
 	if (!existsSync(weights)) {
 		mkdirSync(dirname(weights), { recursive: true });
 		copyFileSync(join(here, "weights.json"), weights);

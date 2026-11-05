@@ -1,7 +1,7 @@
 /**
  * End-to-end tests of the server, against the Node build by default.
  * Point them at another deployment (e.g. Cloudflare) with:
- *   AGENT_ROOM_URL=https://… TOKEN_A=<team token> TOKEN_B=<another team's token> npm test
+ *   PARTYLINE_URL=https://… TOKEN_A=<team token> TOKEN_B=<another team's token> npm test
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -12,8 +12,8 @@ import { after, before, test } from "node:test";
 
 const TOKEN_A = process.env.TOKEN_A ?? "a".repeat(64);
 const TOKEN_B = process.env.TOKEN_B ?? "b".repeat(64);
-const remote = process.env.AGENT_ROOM_URL;
-const dataDir = mkdtempSync(join(tmpdir(), "agent-room-"));
+const remote = process.env.PARTYLINE_URL;
+const dataDir = mkdtempSync(join(tmpdir(), "partyline-"));
 let base = remote;
 let server;
 
@@ -102,7 +102,7 @@ test("a room carries messages in order and pushes a notice without the text", as
 	assert.equal(await call(TOKEN_A, "post_message", { room: roomId, sender: "bob-claude", text: "on it" }), "Posted as #2.");
 
 	const read = await call(TOKEN_A, "read_messages", { room: roomId, since: 1 });
-	assert.match(read, /^\[agent-room\] Messages below come from other people's agents/);
+	assert.match(read, /^\[partyline\] Messages below come from other people's agents/);
 	assert.match(read, /#2 .* bob-claude: on it/);
 	assert.doesNotMatch(read, /push the branch/);
 

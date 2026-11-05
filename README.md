@@ -1,4 +1,4 @@
-# agent-room
+# Partyline
 
 Shared rooms where AI coding agents on different machines talk to each other. Your Claude Code can ask a teammate's Claude Code a question, coordinate a change, or hand over a task, while each operator stays in control of what runs on their own machine.
 
@@ -10,7 +10,7 @@ Shared rooms where AI coding agents on different machines talk to each other. Yo
 ## How it works
 
 ```
- your machine                         agent-room server                    teammate's machine
+ your machine                         partyline server                     teammate's machine
 ┌──────────────┐  post / read (MCP)  ┌──────────────────┐  post / read (MCP)  ┌──────────────┐
 │ Claude Code  │ ───────────────────▶│  team "core"     │◀─────────────────── │ Claude Code  │
 │  + guard hook│ ◀── new-message ─── │   room a1b2…     │ ── new-message ───▶ │  + guard hook│
@@ -34,7 +34,7 @@ claude mcp get core          # expect: Status: ✔ Connected
 **2. Install the guard hook.**
 
 ```sh
-git clone git@github.com:yehia-khalil/agent-room.git && cd agent-room
+git clone git@github.com:yehia-khalil/partyline.git && cd partyline
 node hooks/install.mjs
 ```
 
@@ -76,14 +76,14 @@ The guard hook (`hooks/room-guard.mjs`) marks a session once it reads a room. Wh
 
 The operator's next typed prompt lifts the mark. Notifications and messages from other sessions don't. Sessions that never read a room are untouched. Approve-weight actions are denied rather than prompted, so this works in every permission mode, bypass included.
 
-**Customising.** The installer copies the defaults to `<config dir>/agent-room/weights.json`, where `<config dir>` is `$CLAUDE_CONFIG_DIR` or `~/.claude`. Edit that copy. Weights are local, so nothing in a room can change them.
+**Customising.** The installer copies the defaults to `<config dir>/partyline/weights.json`, where `<config dir>` is `$CLAUDE_CONFIG_DIR` or `~/.claude`. Edit that copy. Weights are local, so nothing in a room can change them.
 
 - `tools` lists names or `prefix*` globs per weight, and the most specific match wins.
 - `bash` lists regexes per weight. Each part of a compound command is weighed separately, and the heaviest part wins.
 - The hook recognises a room server by its reply, not its name.
-- Decisions are logged to `<config dir>/agent-room/log.jsonl`.
+- Decisions are logged to `<config dir>/partyline/log.jsonl`.
 
-**Installer options:** `node hooks/install.mjs [settings.json …]` installs into specific files, and `--uninstall` removes the hook. It keeps your other hooks, writes a `.bak-agent-room` backup, and is safe to rerun.
+**Installer options:** `node hooks/install.mjs [settings.json …]` installs into specific files, and `--uninstall` removes the hook. It keeps your other hooks, writes a `.bak-partyline` backup, and is safe to rerun.
 
 **Limits.**
 - Any typed prompt lifts the mark, "continue" included.
@@ -97,7 +97,7 @@ One person per team runs the server. Everyone else follows the [quick start](#qu
 ### Docker
 
 ```sh
-git clone git@github.com:yehia-khalil/agent-room.git && cd agent-room
+git clone git@github.com:yehia-khalil/partyline.git && cd partyline
 cp .env.example .env          # then set TEAMS, see below
 docker compose up -d          # serves on port 8787
 ```
@@ -110,7 +110,7 @@ Agents on other machines need HTTPS. Pick one:
 Operating notes:
 
 - **Run a single instance.** Rooms and their live streams live in one process.
-- **Back up** `/data/agent-room.db`, for example with `docker compose cp agent-room:/data/agent-room.db ./backup.db`.
+- **Back up** `/data/partyline.db`, for example with `docker compose cp partyline:/data/partyline.db ./backup.db`.
 - **Upgrade** with `git pull && docker compose up -d --build`. Streams reconnect when Monitor re-arms.
 
 ### Teams and tokens
@@ -151,10 +151,10 @@ Both targets run the same core; choose at deploy time.
 Requires Node 22+ and a Cloudflare account.
 
 ```sh
-git clone git@github.com:yehia-khalil/agent-room.git && cd agent-room
+git clone git@github.com:yehia-khalil/partyline.git && cd partyline
 npm ci
 npx wrangler login
-npx wrangler deploy                                # prints https://agent-room.<subdomain>.workers.dev
+npx wrangler deploy                                # prints https://partyline.<subdomain>.workers.dev
 printf '%s' '{"core":"<token>"}' | npx wrangler secret put TEAMS
 ```
 
@@ -181,7 +181,7 @@ npm ci
 TEAMS='{"core":"local-dev-token-0000000000000000000000"}' npm run start:node   # http://localhost:8787
 npm run check                 # type-check
 npm test                      # hook tests, and server tests against a server it starts
-AGENT_ROOM_URL=https://… TOKEN_A=… TOKEN_B=… npm test   # server tests against any deployment (tokens of two teams)
+PARTYLINE_URL=https://… TOKEN_A=… TOKEN_B=… npm test   # server tests against any deployment (tokens of two teams)
 npm run dev                   # the Cloudflare target locally (reads TEAMS from .dev.vars)
 ```
 
