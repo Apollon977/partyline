@@ -19,17 +19,18 @@ function newRoomId(): string {
 		.join("");
 }
 
-function room(env: Env, roomId: string): DurableObjectStub<import("./room").Room> {
-	return env.ROOM.get(env.ROOM.idFromName(roomId));
+/** A team's rooms live under its own name, so one team can never reach another team's rooms. */
+function room(env: Env, team: string, roomId: string): DurableObjectStub<import("./room").Room> {
+	return env.ROOM.get(env.ROOM.idFromName(`${team}:${roomId}`));
 }
 
-function socketUrl(origin: string, roomId: string): string {
-	return `${origin.replace(/^http/, "ws")}/rooms/${roomId}/ws`;
+function socketUrl(origin: string, team: string, roomId: string): string {
+	return `${origin.replace(/^http/, "ws")}/t/${team}/rooms/${roomId}/ws`;
 }
 
-function watchInstructions(origin: string, roomId: string): string {
+function watchInstructions(origin: string, team: string, roomId: string): string {
 	return [
-		`To be woken when someone posts, start a Monitor with ws url ${socketUrl(origin, roomId)}`,
+		`To be woken when someone posts, start a Monitor with ws url ${socketUrl(origin, team, roomId)}`,
 		"(timeout_ms 1800000, re-arm on expiry). Each frame is one new message.",
 	].join(" ");
 }
@@ -48,7 +49,7 @@ function text(value: string) {
 	return { content: [{ type: "text" as const, text: value }] };
 }
 
-function createServer(env: Env, origin: string): McpServer {
+function createServer(env: Env, team: string, origin: string): McpServer {
 	const server = new McpServer({ name: "agent-room", version: "0.1.0" });
 
 	server.registerTool(
@@ -60,9 +61,9 @@ function createServer(env: Env, origin: string): McpServer {
 		},
 		async () => {
 			const roomId = newRoomId();
-			await room(env, roomId).open();
+			await room(env, team, roomId).open();
 
-			return text(`Room ID: ${roomId}\n${watchInstructions(origin, roomId)}`);
+			return text(`Room ID: ${roomId} (team ${team})\n${watchInstructions(origin, team, roomId)}`);
 		},
 	);
 
@@ -78,7 +79,7 @@ function createServer(env: Env, origin: string): McpServer {
 			}),
 		},
 		async ({ room: roomId, sender, text: body }) => {
-			const message = await room(env, roomId).post(sender, body);
+			const message = await room(env, team, roomId).post(sender, body);
 
 			return text(`Posted as #${message.seq}.`);
 		},
@@ -96,7 +97,7 @@ function createServer(env: Env, origin: string): McpServer {
 			}),
 		},
 		async ({ room: roomId, since, limit }) => {
-			const messages = await room(env, roomId).read(since, limit);
+			const messages = await room(env, team, roomId).read(since, limit);
 
 			return text(formatMessages(messages));
 		},
@@ -108,23 +109,51 @@ function createServer(env: Env, origin: string): McpServer {
 			description: "How to be woken up whenever a new message lands in a room.",
 			inputSchema: z.object({ room: roomIdSchema }),
 		},
-		async ({ room: roomId }) => text(watchInstructions(origin, roomId)),
+		async ({ room: roomId }) => text(watchInstructions(origin, team, roomId)),
 	);
 
 	return server;
 }
 
+const TEAM_NAME = /^[a-z0-9-]{1,32}$/;
+
 async function sha256(value: string): Promise<ArrayBuffer> {
 	return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
 }
 
-async function isTeamMember(request: Request, env: Env): Promise<boolean> {
+/** Reads the TEAMS secret: a JSON object of team name to that team's token. */
+function teams(env: Env): Array<[string, string]> {
+	try {
+		const parsed: unknown = JSON.parse(env.TEAMS ?? "{}");
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			return [];
+		}
+
+		return Object.entries(parsed).filter(
+			(entry): entry is [string, string] =>
+				TEAM_NAME.test(entry[0]) && typeof entry[1] === "string" && entry[1].length >= 32,
+		);
+	} catch {
+		return [];
+	}
+}
+
+/** Returns the team whose token the request carries, or null. Every team is checked, in constant time. */
+async function teamFor(request: Request, env: Env): Promise<string | null> {
 	const presented = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-	if (!presented || !env.TEAM_TOKEN) {
-		return false;
+	if (!presented) {
+		return null;
 	}
 
-	return crypto.subtle.timingSafeEqual(await sha256(presented), await sha256(env.TEAM_TOKEN));
+	const presentedHash = await sha256(presented);
+	let match: string | null = null;
+	for (const [team, token] of teams(env)) {
+		if (crypto.subtle.timingSafeEqual(presentedHash, await sha256(token))) {
+			match = team;
+		}
+	}
+
+	return match;
 }
 
 export default {
@@ -132,21 +161,22 @@ export default {
 		const url = new URL(request.url);
 
 		// The room ID is the read capability: 128 random bits, shared only with the team.
-		const socket = url.pathname.match(/^\/rooms\/([0-9a-f]{32})\/ws$/);
+		const socket = url.pathname.match(/^\/t\/([a-z0-9-]{1,32})\/rooms\/([0-9a-f]{32})\/ws$/);
 		if (socket) {
-			return room(env, socket[1]).fetch(request);
+			return room(env, socket[1], socket[2]).fetch(request);
 		}
 
 		if (url.pathname === "/mcp") {
-			if (!(await isTeamMember(request, env))) {
+			const team = await teamFor(request, env);
+			if (!team) {
 				return new Response("Unauthorized", { status: 401 });
 			}
 
-			return createMcpHandler(() => createServer(env, url.origin))(request, env, ctx);
+			return createMcpHandler(() => createServer(env, team, url.origin))(request, env, ctx);
 		}
 
 		if (url.pathname === "/") {
-			return new Response("agent-room: MCP at /mcp, room streams at /rooms/<id>/ws\n");
+			return new Response("agent-room: MCP at /mcp, room streams at /t/<team>/rooms/<id>/ws\n");
 		}
 
 		return new Response("Not found", { status: 404 });

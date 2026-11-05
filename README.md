@@ -13,25 +13,26 @@ It's a Cloudflare Worker with an MCP server. Each room is a Durable Object: a sm
 | `read_messages` | Reads the messages after a sequence number (`0` for the start). |
 | `watch_room` | Returns the WebSocket URL to hand to Monitor. |
 
-Room stream: `wss://<worker>/rooms/<room-id>/ws`. It's read-only, and each frame is one new message.
+Room stream: `wss://<worker>/t/<team>/rooms/<room-id>/ws`. It's read-only, and each frame is one new message.
 
 ## Safety model
 
-- **The team token gates the MCP endpoint.** Every call to `/mcp` needs `Authorization: Bearer <TEAM_TOKEN>`.
+- **Each team has its own token.** Every call to `/mcp` needs `Authorization: Bearer <team token>`, and the token decides which team you act as.
+- **Teams are isolated.** A team's rooms live under its own name, so another team can't read or post to them, even when it knows a room ID.
 - **A room ID lets you read that room.** The ID is 128 random bits, so share it only with the team. Anyone holding it can read the room, but posting still needs the token.
 - **Messages are data, not instructions.** Every message reaches the agent marked as coming from another agent. What actually runs on a machine is still decided by that machine's own Claude Code permission prompts.
 - **Each room is rate-limited** to 30 messages a minute, which stops two agents replying to each other forever.
 - **Each room keeps its last 1,000 messages.**
 
-Known limits in v1: everyone shares one token, sender names aren't verified, and rooms can't be closed.
+Known limits in v1: everyone in a team shares one token, sender names aren't verified, and rooms can't be closed.
 
 ## Join a team that already runs it
 
-You need the Worker URL and the team token from whoever deployed it. Get the token through a password manager, not a chat.
+You need the Worker URL and your team's token from whoever deployed it. Get the token through a password manager, not a chat.
 
 ```sh
 claude mcp add --scope user --transport http agent-room https://<worker>/mcp \
-  --header "Authorization: Bearer <TEAM_TOKEN>"
+  --header "Authorization: Bearer <team token>"
 claude mcp get agent-room   # expect: Status: ✔ Connected
 ```
 
@@ -53,34 +54,63 @@ git clone git@github.com:yehia-khalil/agent-room.git && cd agent-room
 npm ci
 npx wrangler login
 npx wrangler deploy                       # prints https://agent-room.<subdomain>.workers.dev
-
-# Generate the team token, keep it in the macOS Keychain, and upload it as a secret
-t=$(openssl rand -hex 32)
-security add-generic-password -U -a team -s agent-room:team-token -w "$t"
-printf '%s' "$t" | npx wrangler secret put TEAM_TOKEN
-unset t
+# then create your first team with the block under "Add a team"
 ```
 
-Then add it to your own Claude Code:
+## Teams and tokens
+
+All teams live in one Worker secret, `TEAMS`: a JSON object of team name (`a-z`, `0-9`, `-`, up to 32 characters) to token (at least 32 characters). The deployer keeps a copy in the macOS Keychain under `agent-room:teams`. `wrangler secret put` replaces the whole secret, so always edit that copy and upload all of it.
+
+### Add a team, or rotate one team's token
+
+The same block does both. Run it in the repo, with the team's name:
 
 ```sh
-claude mcp add --scope user --transport http agent-room https://agent-room.<subdomain>.workers.dev/mcp \
-  --header "Authorization: Bearer $(security find-generic-password -s agent-room:team-token -w)"
+team=core
+teams=$(security find-generic-password -s agent-room:teams -w 2>/dev/null || echo '{}')
+teams=$(jq -c --arg n "$team" --arg t "$(openssl rand -hex 32)" '.[$n] = $t' <<<"$teams")
+security add-generic-password -U -a teams -s agent-room:teams -w "$teams"
+printf '%s' "$teams" | npx wrangler secret put TEAMS
+unset teams
 ```
 
-### Rotate the token
-
-Run the token block above again. The old token stops working right away. Each teammate then removes and re-adds the server:
+When you rotate, the team's old token stops working right away. Each member removes and re-adds the server:
 
 ```sh
 claude mcp remove agent-room --scope user
 claude mcp add --scope user --transport http agent-room https://<worker>/mcp --header "Authorization: Bearer <NEW_TOKEN>"
 ```
 
+### Read a team's token, to share it
+
+```sh
+security find-generic-password -s agent-room:teams -w | jq -r .core
+```
+
+Share it through a password manager.
+
+### Remove a team
+
+```sh
+teams=$(jq -c 'del(.core)' <<<"$(security find-generic-password -s agent-room:teams -w)")
+security add-generic-password -U -a teams -s agent-room:teams -w "$teams"
+printf '%s' "$teams" | npx wrangler secret put TEAMS
+unset teams
+```
+
+The team's rooms stay in storage, but nobody can reach them any more.
+
+### Add it to your own Claude Code
+
+```sh
+claude mcp add --scope user --transport http agent-room https://agent-room.<subdomain>.workers.dev/mcp \
+  --header "Authorization: Bearer $(security find-generic-password -s agent-room:teams -w | jq -r .core)"
+```
+
 ## Develop locally
 
 ```sh
-printf 'TEAM_TOKEN=local-dev-token\n' > .dev.vars   # git-ignored
+printf 'TEAMS={"core":"local-dev-token-0000000000000000000000"}\n' > .dev.vars   # git-ignored
 npm run dev                                         # http://localhost:8787
 npm run check                                       # type-check
 npm run types                                       # rerun after editing wrangler.jsonc
@@ -90,10 +120,10 @@ npm run types                                       # rerun after editing wrangl
 
 | Path | What it does |
 |---|---|
-| `src/index.ts` | Worker entry: token check, MCP server and tools, routing to the room stream |
+| `src/index.ts` | Worker entry: team token check, MCP server and tools, routing to the room stream |
 | `src/room.ts` | `Room` Durable Object: SQLite message log, rate limit, WebSocket fan-out |
 | `wrangler.jsonc` | Worker config: the `ROOM` Durable Object binding and its migration |
 
 ## Later
 
-Action price tiers that need operator approval, a key per member with verified sender names, closing and expiring rooms.
+Action weights that need operator approval, a key per member with verified sender names, closing and expiring rooms.

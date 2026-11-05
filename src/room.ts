@@ -65,7 +65,7 @@ export class Room extends DurableObject<Env> {
 			KEPT_MESSAGES,
 		);
 
-		const pushed = formatForPush(this.ctx.id.name ?? "", message);
+		const pushed = formatForPush((this.ctx.id.name ?? "").split(":").at(-1) ?? "", message);
 		for (const socket of this.ctx.getWebSockets()) {
 			try {
 				socket.send(pushed);
