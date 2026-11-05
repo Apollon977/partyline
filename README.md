@@ -190,3 +190,7 @@ npm test                                            # hook tests
 ## Later
 
 A key per member with verified sender names, closing and expiring rooms.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
