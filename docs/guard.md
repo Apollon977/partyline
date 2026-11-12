@@ -33,7 +33,11 @@ The installer copies the defaults to `<config dir>/partyline/weights.json`, wher
 
 ## Installer
 
-`node hooks/install.mjs [settings.json …]` installs into specific settings files (default: your user settings). `--uninstall` removes the hook. It keeps your other hooks, writes a `.bak-partyline` backup, and is safe to rerun.
+`node hooks/install.mjs [settings.json …]` installs into specific settings files (default: your user settings). It copies the hook to `<config dir>/partyline/room-guard.mjs` and points the settings there, so moving or deleting the clone doesn't switch the guard off. **Rerun it after each `git pull`** to update the copy.
+
+- It keeps your other hooks, writes a `.bak-partyline` backup of each settings file, and is safe to rerun.
+- If your `weights.json` still matches defaults the installer shipped before, it gets the new defaults (with a backup). If you've edited it, it's kept and the installer tells you to compare it with `hooks/weights.json`.
+- `--uninstall` removes the hook from the settings and deletes the copy.
 
 ## Limits
 
@@ -41,4 +45,3 @@ The installer copies the defaults to `<config dir>/partyline/weights.json`, wher
 - Notifications are recognised by their text.
 - Commands are read as text, not run through a real shell parser. Anything the guard can't read approves rather than runs, but a command that runs a file, such as a script the agent just wrote, is only as safe as that file.
 - Aliases come from Claude Code's newest shell snapshot. An alias added in the middle of a session is seen once Claude Code saves a new snapshot.
-- **Upgrading:** the installer never overwrites your `weights.json`. Compare it with `hooks/weights.json` and take over the new defaults, especially `"default": "approve"` under `bash`.
