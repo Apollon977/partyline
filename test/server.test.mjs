@@ -60,7 +60,7 @@ async function call(token, name, args) {
 async function createRoom(token = TOKEN_A) {
 	const created = await call(token, "create_room", {});
 
-	return { roomId: created.match(/[0-9a-f]{32}/)[0], wsUrl: created.match(/ws\S+\/ws/)[0], created };
+	return { roomId: created.match(/[0-9a-f]{32}/)[0], wsUrl: created.match(/ws\S+\/ws\?since=\d+/)[0], created };
 }
 
 function listen(wsUrl) {
@@ -111,6 +111,38 @@ test("a room carries messages in order and pushes a notice without the text", as
 	assert.match(stream.frames[0], /new message #1 from alice-claude/);
 	assert.doesNotMatch(stream.frames.join(""), /push the branch/);
 	stream.ws.close();
+});
+
+test("a stream opened behind the room starts with one catch-up notice", async () => {
+	const { roomId, wsUrl } = await createRoom();
+	assert.match(wsUrl, /\?since=0$/);
+	await call(TOKEN_A, "post_message", { room: roomId, sender: "alice-claude", text: "one" });
+	await call(TOKEN_A, "post_message", { room: roomId, sender: "alice-claude", text: "two" });
+
+	const fromStart = listen(wsUrl);
+	await fromStart.opened;
+	const rewatch = await call(TOKEN_A, "watch_room", { room: roomId, since: 1 });
+	const fromOne = listen(rewatch.match(/ws\S+\/ws\?since=\d+/)[0]);
+	await fromOne.opened;
+	const current = await call(TOKEN_A, "watch_room", { room: roomId });
+	assert.match(current, /\?since=2 /);
+	const upToDate = listen(current.match(/ws\S+\/ws\?since=\d+/)[0]);
+	await upToDate.opened;
+
+	await call(TOKEN_A, "post_message", { room: roomId, sender: "bob-claude", text: "three" });
+	await new Promise((resolve) => setTimeout(resolve, 300));
+
+	assert.deepEqual(fromStart.frames.length, 2);
+	assert.match(fromStart.frames[0], /2 new messages since #0, latest #2\. Call read_messages with room \S+ and since 0/);
+	assert.match(fromStart.frames[1], /new message #3 from bob-claude/);
+	assert.match(fromOne.frames[0], /1 new message since #1, latest #2/);
+	assert.equal(upToDate.frames.length, 1);
+	assert.match(upToDate.frames[0], /new message #3/);
+	for (const stream of [fromStart, fromOne, upToDate]) {
+		stream.ws.close();
+	}
+
+	await assert.rejects(listen(wsUrl.replace("since=0", "since=abc")).opened);
 });
 
 test("another team cannot read, post to or stream a room", async () => {

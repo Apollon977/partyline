@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { formatPush } from "../core/app.ts";
+import { formatCatchUp, formatPush, matchSocketPath } from "../core/app.ts";
 import { type Message, RoomLog } from "../core/room-log.ts";
 
 /**
@@ -43,7 +43,11 @@ export class Room extends DurableObject<Env> {
 		return this.log.read(this.key, since, limit);
 	}
 
-	/** Accepts a read-only WebSocket that receives every new message. */
+	async lastSeq(): Promise<number> {
+		return this.log.lastSeq(this.key);
+	}
+
+	/** Accepts a read-only WebSocket that receives every new message, after a catch-up notice for any it missed. */
 	async fetch(request: Request): Promise<Response> {
 		if (request.headers.get("Upgrade") !== "websocket") {
 			return new Response("Expected a WebSocket upgrade.", { status: 426 });
@@ -54,6 +58,11 @@ export class Room extends DurableObject<Env> {
 
 		const [client, server] = Object.values(new WebSocketPair());
 		this.ctx.acceptWebSocket(server);
+		const since = matchSocketPath(new URL(request.url))?.since ?? null;
+		const catchUp = formatCatchUp(this.key.split(":").at(-1) ?? "", since, this.log.lastSeq(this.key));
+		if (catchUp) {
+			server.send(catchUp);
+		}
 
 		return new Response(null, { status: 101, webSocket: client });
 	}

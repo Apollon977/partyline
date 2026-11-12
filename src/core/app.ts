@@ -10,6 +10,7 @@ export interface Rooms {
 	open(team: string, roomId: string): Promise<void>;
 	post(team: string, roomId: string, sender: string, text: string): Promise<Message>;
 	read(team: string, roomId: string, since: number, limit: number): Promise<Message[]>;
+	lastSeq(team: string, roomId: string): Promise<number>;
 }
 
 const ROOM_ID = /^[0-9a-f]{32}$/;
@@ -30,10 +31,18 @@ export function roomKey(team: string, roomId: string): string {
 	return `${team}:${roomId}`;
 }
 
-export function matchSocketPath(pathname: string): { team: string; roomId: string } | null {
-	const match = pathname.match(SOCKET_PATH);
+/**
+ * Matches a room stream URL. `since` is the last seq the watcher has seen, or null when
+ * the URL has none; a malformed `since` makes the whole URL a non-match.
+ */
+export function matchSocketPath(url: URL): { team: string; roomId: string; since: number | null } | null {
+	const match = url.pathname.match(SOCKET_PATH);
+	const since = url.searchParams.get("since");
+	if (!match || (since !== null && !/^\d{1,15}$/.test(since))) {
+		return null;
+	}
 
-	return match ? { team: match[1], roomId: match[2] } : null;
+	return { team: match[1], roomId: match[2], since: since === null ? null : Number(since) };
 }
 
 /**
@@ -45,14 +54,28 @@ export function formatPush(roomId: string, message: Message): string {
 	return `[partyline ${roomId}] new message #${message.seq} from ${message.sender}. Call read_messages with room ${roomId} and since ${message.seq - 1} to read it.`;
 }
 
+/** The frame sent when a stream opens behind the room, so nothing posted while it was down is missed. */
+export function formatCatchUp(roomId: string, since: number | null, lastSeq: number): string | null {
+	if (since === null || lastSeq <= since) {
+		return null;
+	}
+	const count = lastSeq - since;
+
+	return `[partyline ${roomId}] ${count} new message${count === 1 ? "" : "s"} since #${since}, latest #${lastSeq}. Call read_messages with room ${roomId} and since ${since} to read ${count === 1 ? "it" : "them"}.`;
+}
+
 function newRoomId(): string {
 	return [...crypto.getRandomValues(new Uint8Array(16))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function watchInstructions(origin: string, team: string, roomId: string): string {
-	const url = `${origin.replace(/^http/, "ws")}/t/${team}/rooms/${roomId}/ws`;
+function watchInstructions(origin: string, team: string, roomId: string, since: number): string {
+	const url = `${origin.replace(/^http/, "ws")}/t/${team}/rooms/${roomId}/ws?since=${since}`;
 
-	return `To be woken when someone posts, start a Monitor with ws url ${url} (timeout_ms 1800000, re-arm on expiry). Each frame says a new message arrived; call read_messages to read it.`;
+	return (
+		`To be woken when someone posts, start a Monitor with ws url ${url} (timeout_ms 1800000). ` +
+		"Each frame says new messages arrived; call read_messages to read them. " +
+		`When the Monitor expires, call watch_room with room ${roomId} and since set to the Last seq you have read, and start a Monitor with the URL it returns, so nothing posted in between is missed.`
+	);
 }
 
 function formatMessages(messages: Message[]): string {
@@ -82,7 +105,7 @@ function createServer(rooms: Rooms, team: string, origin: string): McpServer {
 			const roomId = newRoomId();
 			await rooms.open(team, roomId);
 
-			return text(`Room ID: ${roomId} (team ${team})\n${watchInstructions(origin, team, roomId)}`);
+			return text(`Room ID: ${roomId} (team ${team})\n${watchInstructions(origin, team, roomId, 0)}`);
 		},
 	);
 
@@ -122,10 +145,11 @@ function createServer(rooms: Rooms, team: string, origin: string): McpServer {
 	server.registerTool(
 		"watch_room",
 		{
-			description: "How to be woken up whenever a new message lands in a room.",
-			inputSchema: z.object({ room: roomIdSchema }),
+			description:
+				"How to be woken up whenever a new message lands in a room. Pass since (the Last seq you have read) to also be told about messages you missed.",
+			inputSchema: z.object({ room: roomIdSchema, since: z.number().int().min(0).optional() }),
 		},
-		async ({ room }) => text(watchInstructions(origin, team, room)),
+		async ({ room, since }) => text(watchInstructions(origin, team, room, since ?? (await rooms.lastSeq(team, room)))),
 	);
 
 	return server;

@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { DatabaseSync } from "node:sqlite";
 import { type WebSocket, WebSocketServer } from "ws";
-import { formatPush, handleRequest, matchSocketPath, type Rooms, roomKey } from "../core/app.ts";
+import { formatCatchUp, formatPush, handleRequest, matchSocketPath, type Rooms, roomKey } from "../core/app.ts";
 import { type Message, RoomLog, type SqlValue } from "../core/room-log.ts";
 
 const port = Number(process.env.PORT ?? 8787);
@@ -51,6 +51,9 @@ const rooms: Rooms = {
 	},
 	async read(team, roomId, since, limit) {
 		return log.read(roomKey(team, roomId), since, limit);
+	},
+	async lastSeq(team, roomId) {
+		return log.lastSeq(roomKey(team, roomId));
 	},
 };
 
@@ -108,7 +111,7 @@ const server = createServer(async (request, out) => {
 const sockets = new WebSocketServer({ noServer: true });
 
 server.on("upgrade", (request, socket, head) => {
-	const match = matchSocketPath(new URL(request.url ?? "/", "http://localhost").pathname);
+	const match = matchSocketPath(new URL(request.url ?? "/", "http://localhost"));
 	const key = match ? roomKey(match.team, match.roomId) : null;
 	if (!key || !log.isOpen(key)) {
 		socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
@@ -119,6 +122,10 @@ server.on("upgrade", (request, socket, head) => {
 		const set = listeners.get(key) ?? new Set();
 		set.add(ws);
 		listeners.set(key, set);
+		const catchUp = formatCatchUp(match!.roomId, match!.since, log.lastSeq(key));
+		if (catchUp) {
+			ws.send(catchUp);
+		}
 		ws.on("close", () => {
 			set.delete(ws);
 			if (set.size === 0) {

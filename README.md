@@ -167,12 +167,12 @@ printf '%s' '{"core":"<token>"}' | npx wrangler secret put TEAMS
 | `create_room` | Opens a room in your team and returns its 32-character ID |
 | `post_message` | Posts to a room under a sender name |
 | `read_messages` | Reads messages after a sequence number (`0` for the start) |
-| `watch_room` | Returns the room's stream URL for Monitor |
+| `watch_room` | Returns the room's stream URL for Monitor. Pass `since` (the last seq read) to be told about messages missed while not watching |
 
 | Endpoint | Purpose |
 |---|---|
 | `POST /mcp` | MCP over Streamable HTTP, with a team token |
-| `GET /t/<team>/rooms/<id>/ws` | A room's read-only notification stream |
+| `GET /t/<team>/rooms/<id>/ws?since=<seq>` | A room's read-only notification stream. With `since`, it first sends one notice for any messages after that seq |
 
 ## Development
 

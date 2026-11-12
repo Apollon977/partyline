@@ -12,6 +12,7 @@ function roomsOn(env: Env): Rooms {
 		open: (team, roomId) => room(env, team, roomId).open(),
 		post: (team, roomId, sender, text) => room(env, team, roomId).post(sender, text),
 		read: (team, roomId, since, limit) => room(env, team, roomId).read(since, limit),
+		lastSeq: (team, roomId) => room(env, team, roomId).lastSeq(),
 	};
 }
 
@@ -20,7 +21,7 @@ export default {
 		const url = new URL(request.url);
 
 		// The room ID is the read capability: 128 random bits, shared only with the team.
-		const socket = matchSocketPath(url.pathname);
+		const socket = matchSocketPath(url);
 		if (socket) {
 			return room(env, socket.team, socket.roomId).fetch(request);
 		}

@@ -73,6 +73,14 @@ export class RoomLog {
 		return message;
 	}
 
+	/** The seq of the room's latest message, or 0 when it has none. */
+	lastSeq(room: string): number {
+		this.assertOpen(room);
+		const [{ seq }] = this.sql.all<{ seq: number }>("SELECT COALESCE(MAX(seq), 0) AS seq FROM room_messages WHERE room = ?", room);
+
+		return seq;
+	}
+
 	read(room: string, since: number, limit: number): Message[] {
 		this.assertOpen(room);
 
