@@ -26,21 +26,21 @@ npm test          # guard hook tests, plus server tests against a server it star
 To run a server locally:
 
 ```sh
-TEAMS='{"core":"local-dev-token-0000000000000000000000"}' npm run start:node   # http://localhost:8787
+TEAMS='{"core":{"dev":"local-dev-token-0000000000000000000000"}}' npm run start:node   # http://localhost:8787
 npm run dev       # the Cloudflare target locally (reads TEAMS from .dev.vars)
 ```
 
-Server tests also run against any deployment, given tokens of two teams:
+Server tests also run against any deployment, given two members of one team and a member of another:
 
 ```sh
-PARTYLINE_URL=https://… TOKEN_A=… TOKEN_B=… npm test
+PARTYLINE_URL=https://… TOKEN_A=… TOKEN_A2=… TOKEN_B=… npm test
 ```
 
 ## Where things go
 
 | Change | Where |
 |---|---|
-| Tools, teams, tokens, message format | `src/core/`. Keep it free of anything host-specific, so both targets get the change. |
+| Tools, teams, members and tokens, message format | `src/core/`. Keep it free of anything host-specific, so both targets get the change. |
 | The Docker server | `src/node/` |
 | The Cloudflare Workers target | `src/cloudflare/` |
 | The guard hook and its default weights | `hooks/` |

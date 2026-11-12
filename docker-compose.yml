@@ -1,6 +1,6 @@
 # partyline.
 #
-#   cp .env.example .env     # then put your teams in it
+#   cp .env.example .env     # then put your teams and members in it
 #   docker compose up -d                       # on http://localhost:8787
 #   docker compose --profile https up -d       # adds Caddy with HTTPS for $DOMAIN
 #

@@ -2,7 +2,7 @@
  * partyline on Node: one process, rooms in a SQLite file, room streams over WebSockets.
  *
  * Environment:
- *   TEAMS       JSON object of team name to token (required)
+ *   TEAMS       JSON object of team name to member name to token (required)
  *   PORT        port to listen on (default 8787)
  *   DATA_DIR    where partyline.db lives (default ./data)
  *   PUBLIC_URL  the https:// address agents reach it on, when behind a proxy
@@ -16,14 +16,16 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { DatabaseSync } from "node:sqlite";
 import { type WebSocket, WebSocketServer } from "ws";
-import { formatCatchUp, formatPush, handleRequest, matchSocketPath, type Rooms, roomKey } from "../core/app.ts";
+import { formatCatchUp, formatPush, handleRequest, matchSocketPath, parseTeams, type Rooms, roomKey } from "../core/app.ts";
 import { type Message, RoomLog, type SqlValue } from "../core/room-log.ts";
 
 const port = Number(process.env.PORT ?? 8787);
 const dataDir = process.env.DATA_DIR ?? "./data";
 
-if (!process.env.TEAMS) {
-	console.error("partyline: set TEAMS, e.g. TEAMS='{\"core\":\"<64-character token>\"}'");
+try {
+	parseTeams(process.env.TEAMS);
+} catch (error) {
+	console.error(`partyline: ${(error as Error).message} Set it like TEAMS='{"core":{"alice-claude":"<64-character token>"}}'.`);
 	process.exit(1);
 }
 
