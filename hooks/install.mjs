@@ -113,7 +113,9 @@ function installWeights() {
 		writeFileSync(weights, defaults);
 		console.log(`Updated ${weights} to the new defaults (it had no edits of yours; backup next to it).`);
 	} else {
-		console.log(`Kept ${weights}: it has your own edits. Compare it with ${join(here, "weights.json")} for new defaults.`);
+		console.log(
+			`Kept ${weights}: it has your own edits. Compare it with ${join(here, "weights.json")} for new defaults.`,
+		);
 	}
 
 	writeFileSync(join(stateDir, "weights.default.json"), defaults);

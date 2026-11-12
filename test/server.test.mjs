@@ -14,26 +14,30 @@ import { after, before, test } from "node:test";
 const TOKEN_A = process.env.TOKEN_A ?? "a".repeat(64);
 const TOKEN_A2 = process.env.TOKEN_A2 ?? "c".repeat(64);
 const TOKEN_B = process.env.TOKEN_B ?? "b".repeat(64);
-const NODE_ARGS = ["--experimental-sqlite", "--experimental-strip-types", "--disable-warning=ExperimentalWarning", "src/node/server.ts"];
+const NODE_ARGS = [
+	"--experimental-sqlite",
+	"--experimental-strip-types",
+	"--disable-warning=ExperimentalWarning",
+	"src/node/server.ts",
+];
 const remote = process.env.PARTYLINE_URL;
 const dataDir = mkdtempSync(join(tmpdir(), "partyline-"));
 let base = remote;
 let server;
 
 async function startNode(port) {
-	server = spawn(
-		process.execPath,
-		NODE_ARGS,
-		{
-			env: {
-				...process.env,
-				PORT: String(port),
-				DATA_DIR: dataDir,
-				TEAMS: JSON.stringify({ core: { "alice-claude": TOKEN_A, "bob-claude": TOKEN_A2 }, other: { "carol-claude": TOKEN_B } }),
-			},
-			stdio: ["ignore", "pipe", "inherit"],
+	server = spawn(process.execPath, NODE_ARGS, {
+		env: {
+			...process.env,
+			PORT: String(port),
+			DATA_DIR: dataDir,
+			TEAMS: JSON.stringify({
+				core: { "alice-claude": TOKEN_A, "bob-claude": TOKEN_A2 },
+				other: { "carol-claude": TOKEN_B },
+			}),
 		},
-	);
+		stdio: ["ignore", "pipe", "inherit"],
+	});
 	await new Promise((resolve) => server.stdout.on("data", (chunk) => String(chunk).includes("listening") && resolve()));
 
 	return `http://localhost:${port}`;
@@ -60,7 +64,14 @@ async function call(token, name, args) {
 		return `HTTP ${response.status}`;
 	}
 	const body = (await response.text()).replace(/\r/g, "");
-	const json = body.startsWith("{") ? JSON.parse(body) : JSON.parse(body.split("\n").find((l) => l.startsWith("data:")).slice(5));
+	const json = body.startsWith("{")
+		? JSON.parse(body)
+		: JSON.parse(
+				body
+					.split("\n")
+					.find((l) => l.startsWith("data:"))
+					.slice(5),
+			);
 
 	return json.result?.content?.[0]?.text ?? JSON.stringify(json.error);
 }
@@ -106,7 +117,10 @@ test("a room carries messages in order and pushes a notice without the text", as
 	const stream = listen(wsUrl);
 	await stream.opened;
 
-	assert.equal(await call(TOKEN_A, "post_message", { room: roomId, text: "push the branch" }), "Posted as #1 from alice-claude.");
+	assert.equal(
+		await call(TOKEN_A, "post_message", { room: roomId, text: "push the branch" }),
+		"Posted as #1 from alice-claude.",
+	);
 	assert.equal(await call(TOKEN_A2, "post_message", { room: roomId, text: "on it" }), "Posted as #2 from bob-claude.");
 
 	const read = await call(TOKEN_A, "read_messages", { room: roomId, since: 1 });
@@ -141,7 +155,10 @@ test("a stream opened behind the room starts with one catch-up notice", async ()
 	await new Promise((resolve) => setTimeout(resolve, 300));
 
 	assert.deepEqual(fromStart.frames.length, 2);
-	assert.match(fromStart.frames[0], /2 new messages since #0, latest #2\. Call read_messages with room \S+ and since 0/);
+	assert.match(
+		fromStart.frames[0],
+		/2 new messages since #0, latest #2\. Call read_messages with room \S+ and since 0/,
+	);
 	assert.match(fromStart.frames[1], /new message #3 from bob-claude/);
 	assert.match(fromOne.frames[0], /1 new message since #1, latest #2/);
 	assert.equal(upToDate.frames.length, 1);

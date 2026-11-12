@@ -19,7 +19,16 @@
  * expanded first, shell functions need approval, and so does anything not recognised.
  */
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +39,13 @@ const TIERS = ["free", "notify", "approve"];
  * UserPromptSubmit also fires for turns no human started: background task and Monitor
  * notifications, scheduled tasks, messages from other sessions. Those must not lift the mark.
  */
-const NOT_THE_OPERATOR = [/<task-notification/i, /\[partyline /, /<cross-session-message/i, /\[SYSTEM NOTIFICATION/i, /<system-reminder/i];
+const NOT_THE_OPERATOR = [
+	/<task-notification/i,
+	/\[partyline /,
+	/<cross-session-message/i,
+	/\[SYSTEM NOTIFICATION/i,
+	/<system-reminder/i,
+];
 const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
 const stateDir = join(configDir, "partyline");
 const hooksDir = dirname(fileURLToPath(import.meta.url));
@@ -123,14 +138,14 @@ function weighTool(name, tools) {
 /** Removes shell quoting from a word or an alias value: '…', $'…', "…" and backslashes. */
 function unquote(text) {
 	let out = "";
-	for (let i = 0; i < text.length; ) {
+	for (let i = 0; i < text.length;) {
 		const c = text[i];
 		if (c === "'") {
 			const end = text.indexOf("'", i + 1);
 			out += text.slice(i + 1, end < 0 ? text.length : end);
 			i = end < 0 ? text.length : end + 1;
 		} else if (c === "$" && text[i + 1] === "'") {
-			for (i += 2; i < text.length && text[i] !== "'"; ) {
+			for (i += 2; i < text.length && text[i] !== "'";) {
 				if (text[i] === "\\" && i + 1 < text.length) {
 					out += { n: "\n", t: "\t" }[text[i + 1]] ?? text[i + 1];
 					i += 2;
@@ -173,7 +188,9 @@ function loadShell() {
 		}
 		for (const line of readFileSync(join(dir, newest.file), "utf8").split("\n")) {
 			const alias = line.match(/^alias (?:-- )?([^=\s]+)=(.*)$/);
-			const fn = line.match(/^(?:function\s+)?([A-Za-z0-9_.:+@-]+)\s*\(\)\s*\{?\s*$/) ?? line.match(/^function\s+([A-Za-z0-9_.:+@-]+)/);
+			const fn =
+				line.match(/^(?:function\s+)?([A-Za-z0-9_.:+@-]+)\s*\(\)\s*\{?\s*$/) ??
+				line.match(/^function\s+([A-Za-z0-9_.:+@-]+)/);
 			if (alias) {
 				shell.aliases.set(alias[1], unquote(alias[2]));
 			} else if (fn) {
@@ -205,14 +222,31 @@ function commandParts(command) {
 }
 
 /** Git options that may come before the subcommand, and whether they take a value. */
-const GIT_OPTIONS = { "-C": true, "-c": true, "--git-dir": true, "--work-tree": true, "--namespace": true, "--no-pager": false, "-P": false, "--paginate": false, "-p": false, "--bare": false, "--literal-pathspecs": false, "--no-replace-objects": false };
+const GIT_OPTIONS = {
+	"-C": true,
+	"-c": true,
+	"--git-dir": true,
+	"--work-tree": true,
+	"--namespace": true,
+	"--no-pager": false,
+	"-P": false,
+	"--paginate": false,
+	"-p": false,
+	"--bare": false,
+	"--literal-pathspecs": false,
+	"--no-replace-objects": false,
+};
 
 /** A git alias's definition in the folder the command runs in, or null. */
 function gitAlias(name, cwd) {
 	if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
 		return null;
 	}
-	const run = spawnSync("git", ["config", "--get", `alias.${name}`], { cwd: cwd ?? process.cwd(), encoding: "utf8", timeout: 2000 });
+	const run = spawnSync("git", ["config", "--get", `alias.${name}`], {
+		cwd: cwd ?? process.cwd(),
+		encoding: "utf8",
+		timeout: 2000,
+	});
 
 	return run.status === 0 && run.stdout.trim() ? run.stdout.trim() : null;
 }
@@ -280,7 +314,13 @@ function weighPart(part, bash, context, seen) {
 
 	const test = (patterns) => (patterns ?? []).some((pattern) => new RegExp(pattern).test(normalized));
 
-	return test(bash.approve) ? "approve" : test(bash.notify) ? "notify" : test(bash.free) ? "free" : (bash.default ?? "approve");
+	return test(bash.approve)
+		? "approve"
+		: test(bash.notify)
+			? "notify"
+			: test(bash.free)
+				? "free"
+				: (bash.default ?? "approve");
 }
 
 /** Each simple command in a command line is weighed on its own; the heaviest wins. */

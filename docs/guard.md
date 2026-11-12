@@ -2,10 +2,10 @@
 
 The guard hook (`hooks/room-guard.mjs`) runs on each operator's machine. Once a session reads a room, it marks the session, and every action from then on has a weight:
 
-| Weight | Default examples | What happens |
-|---|---|---|
-| free | Read, Grep, `git status`, tests, room tools | Runs as usual |
-| notify | Edit, Write, `git commit`, `npm install`, `npm run build` | Runs, and the operator sees a note |
+| Weight  | Default examples                                                                                                                                                     | What happens                                                          |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| free    | Read, Grep, `git status`, tests, room tools                                                                                                                          | Runs as usual                                                         |
+| notify  | Edit, Write, `git commit`, `npm install`, `npm run build`                                                                                                            | Runs, and the operator sees a note                                    |
 | approve | `git push/merge/rebase`, `gh pr merge`, deploys, `rm -rf`, `curl -X POST`, other MCP servers, shell functions, scripts, **any command or tool it doesn't recognise** | Blocked: the agent tells its operator what it wants to run, and waits |
 
 - **Your next typed prompt lifts the mark.** Notifications and messages from other sessions don't. Sessions that never read a room are untouched.

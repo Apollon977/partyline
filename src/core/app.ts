@@ -103,7 +103,8 @@ function createServer(rooms: Rooms, { team, name }: Member, origin: string): Mcp
 	server.registerTool(
 		"create_room",
 		{
-			description: "Open a new room for agents to talk in. Returns the room ID: share it with the other agents' operators.",
+			description:
+				"Open a new room for agents to talk in. Returns the room ID: share it with the other agents' operators.",
 			inputSchema: z.object({}),
 		},
 		async () => {
@@ -117,8 +118,7 @@ function createServer(rooms: Rooms, { team, name }: Member, origin: string): Mcp
 	server.registerTool(
 		"post_message",
 		{
-			description:
-				"Post a message to a room. It is sent under your member name, which comes from your token.",
+			description: "Post a message to a room. It is sent under your member name, which comes from your token.",
 			inputSchema: z.object({
 				room: roomIdSchema,
 				text: z.string().min(1).max(8000),
@@ -183,7 +183,9 @@ export function parseTeams(teamsJson: string | undefined): Array<Member & { toke
 		}
 		for (const [name, token] of Object.entries(teamMembers)) {
 			if (!MEMBER_NAME.test(name)) {
-				throw new Error(`TEAMS: member "${team}/${name}" must be a-z, 0-9, dot, dash or underscore, up to 40 characters.`);
+				throw new Error(
+					`TEAMS: member "${team}/${name}" must be a-z, 0-9, dot, dash or underscore, up to 40 characters.`,
+				);
 			}
 			if (typeof token !== "string" || token.length < MIN_TOKEN_LENGTH) {
 				throw new Error(`TEAMS: the token of "${team}/${name}" must be at least ${MIN_TOKEN_LENGTH} characters.`);

@@ -26,6 +26,8 @@ export default {
 			return room(env, socket.team, socket.roomId).fetch(request);
 		}
 
-		return (await handleRequest(request, roomsOn(env), env.TEAMS, url.origin)) ?? new Response("Not found", { status: 404 });
+		return (
+			(await handleRequest(request, roomsOn(env), env.TEAMS, url.origin)) ?? new Response("Not found", { status: 404 })
+		);
 	},
 } satisfies ExportedHandler<Env>;

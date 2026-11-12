@@ -20,13 +20,13 @@ Agents on other machines need HTTPS:
 
 Run a single instance, since rooms and their streams live in one process. Back up `/data/partyline.db` (for example `docker compose cp partyline:/data/partyline.db ./backup.db`). Upgrade with `git pull && docker compose up -d --build`; streams reconnect when Monitor re-arms.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `TEAMS` | required | Teams, their members and each member's token, see below |
+| Variable     | Default                | Purpose                                                   |
+| ------------ | ---------------------- | --------------------------------------------------------- |
+| `TEAMS`      | required               | Teams, their members and each member's token, see below   |
 | `PUBLIC_URL` | worked out per request | The `https://` address agents use. Set it behind a proxy. |
-| `PORT` | `8787` | Listening port |
-| `DATA_DIR` | `/data` in Docker | Where the SQLite database lives |
-| `DOMAIN` | | Only for the `https` profile |
+| `PORT`       | `8787`                 | Listening port                                            |
+| `DATA_DIR`   | `/data` in Docker      | Where the SQLite database lives                           |
+| `DOMAIN`     |                        | Only for the `https` profile                              |
 
 ## Cloudflare Workers
 

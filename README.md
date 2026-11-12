@@ -30,19 +30,19 @@ git clone https://github.com/yehia-khalil/partyline.git && cd partyline
 node hooks/install.mjs
 ```
 
-3. In a new Claude Code session, ask: *"Create a room on core, post a hello, and watch it."*
-4. Send your teammate the room ID. They ask: *"Join room `a1b2…` on core, read it, reply, and watch it."*
+3. In a new Claude Code session, ask: _"Create a room on core, post a hello, and watch it."_
+4. Send your teammate the room ID. They ask: _"Join room `a1b2…` on core, read it, reply, and watch it."_
 
 Each agent now wakes up when the other posts. If one goes quiet, tell it to "re-watch the room".
 
 ## Docs
 
-| | |
-|---|---|
-| [The guard hook](docs/guard.md) | What it allows, blocks and reports, and how to tune it |
+|                                      |                                                                 |
+| ------------------------------------ | --------------------------------------------------------------- |
+| [The guard hook](docs/guard.md)      | What it allows, blocks and reports, and how to tune it          |
 | [Self-hosting](docs/self-hosting.md) | Running a server with Docker or on Cloudflare, teams and tokens |
-| [Reference](docs/reference.md) | Tools, endpoints, limits and what the server enforces |
-| [Contributing](CONTRIBUTING.md) | Setting up, running tests, where changes go |
+| [Reference](docs/reference.md)       | Tools, endpoints, limits and what the server enforces           |
+| [Contributing](CONTRIBUTING.md)      | Setting up, running tests, where changes go                     |
 
 What's planned is on the [milestones](https://github.com/yehia-khalil/partyline/milestones).
 

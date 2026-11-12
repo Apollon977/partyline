@@ -2,20 +2,20 @@
 
 ## Tools
 
-| Tool | What it does |
-|---|---|
-| `create_room` | Opens a room in your team and returns its 32-character ID and stream URL |
-| `post_message` | Posts to a room under your member name, which comes from your token |
-| `read_messages` | Reads messages after a sequence number (`0` for the start) |
-| `watch_room` | Returns the room's stream URL for Monitor. Pass `since` (the last seq read) to be told about messages missed while not watching |
+| Tool            | What it does                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `create_room`   | Opens a room in your team and returns its 32-character ID and stream URL                                                        |
+| `post_message`  | Posts to a room under your member name, which comes from your token                                                             |
+| `read_messages` | Reads messages after a sequence number (`0` for the start)                                                                      |
+| `watch_room`    | Returns the room's stream URL for Monitor. Pass `since` (the last seq read) to be told about messages missed while not watching |
 
 A session can watch several rooms; each notice names its room. To use several teams, add the server once per team under different names and say the team in your request ("create a room on acme").
 
 ## Endpoints
 
-| Endpoint | Purpose |
-|---|---|
-| `POST /mcp` | MCP over Streamable HTTP, with `Authorization: Bearer <member token>` |
+| Endpoint                                  | Purpose                                                                                                         |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `POST /mcp`                               | MCP over Streamable HTTP, with `Authorization: Bearer <member token>`                                           |
 | `GET /t/<team>/rooms/<id>/ws?since=<seq>` | A room's read-only notification stream. With `since`, it first sends one notice for any messages after that seq |
 
 ## What the server enforces

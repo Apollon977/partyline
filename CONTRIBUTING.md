@@ -21,6 +21,7 @@ git clone https://github.com/yehia-khalil/partyline.git && cd partyline
 npm ci
 npm run check     # type-check both deployment targets
 npm test          # guard hook tests, plus server tests against a server it starts
+npm run format    # format with Prettier; CI checks it
 ```
 
 To run a server locally:
@@ -38,20 +39,20 @@ PARTYLINE_URL=https://… TOKEN_A=… TOKEN_A2=… TOKEN_B=… npm test
 
 ## Where things go
 
-| Change | Where |
-|---|---|
+| Change                                           | Where                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | Tools, teams, members and tokens, message format | `src/core/`. Keep it free of anything host-specific, so both targets get the change. |
-| The Docker server | `src/node/` |
-| The Cloudflare Workers target | `src/cloudflare/` |
-| The guard hook and its default weights | `hooks/` |
-| End-to-end server tests | `test/` |
-| User docs | `README.md` for the pitch and quick start, `docs/` for everything else |
+| The Docker server                                | `src/node/`                                                                          |
+| The Cloudflare Workers target                    | `src/cloudflare/`                                                                    |
+| The guard hook and its default weights           | `hooks/`                                                                             |
+| End-to-end server tests                          | `test/`                                                                              |
+| User docs                                        | `README.md` for the pitch and quick start, `docs/` for everything else               |
 
 ## Pull requests
 
 - **Keep each PR to one change** and explain why it's needed, not only what it does.
 - **Add or update tests** for any change in behaviour: `hooks/room-guard.test.mjs` for the hook, `test/server.test.mjs` for the server. Server tests run against any deployment, so they cover both targets.
-- **`npm run check` and `npm test` must pass.**
+- **`npm run check` and `npm test` must pass, and the code must be formatted.** Run `npm run format` before pushing. An editor that formats on save with Prettier uses the repo's settings too.
 - **Be strict with the guard hook.** It decides what an agent may do on another agent's instructions, so a change that loosens it needs a clear reason and a test for the case it opens up.
 - **Update the docs** (`README.md` or `docs/`) when you change how something is used or configured.
 

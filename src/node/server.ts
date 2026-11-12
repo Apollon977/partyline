@@ -16,7 +16,15 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { DatabaseSync } from "node:sqlite";
 import { type WebSocket, WebSocketServer } from "ws";
-import { formatCatchUp, formatPush, handleRequest, matchSocketPath, parseTeams, type Rooms, roomKey } from "../core/app.ts";
+import {
+	formatCatchUp,
+	formatPush,
+	handleRequest,
+	matchSocketPath,
+	parseTeams,
+	type Rooms,
+	roomKey,
+} from "../core/app.ts";
 import { type Message, RoomLog, type SqlValue } from "../core/room-log.ts";
 
 const port = Number(process.env.PORT ?? 8787);
@@ -25,7 +33,9 @@ const dataDir = process.env.DATA_DIR ?? "./data";
 try {
 	parseTeams(process.env.TEAMS);
 } catch (error) {
-	console.error(`partyline: ${(error as Error).message} Set it like TEAMS='{"core":{"alice-claude":"<64-character token>"}}'.`);
+	console.error(
+		`partyline: ${(error as Error).message} Set it like TEAMS='{"core":{"alice-claude":"<64-character token>"}}'.`,
+	);
 	process.exit(1);
 }
 
@@ -63,7 +73,9 @@ function originOf(request: IncomingMessage): string {
 	if (process.env.PUBLIC_URL) {
 		return process.env.PUBLIC_URL.replace(/\/$/, "");
 	}
-	const proto = String(request.headers["x-forwarded-proto"] ?? "http").split(",")[0].trim();
+	const proto = String(request.headers["x-forwarded-proto"] ?? "http")
+		.split(",")[0]
+		.trim();
 
 	return `${proto}://${request.headers.host ?? `localhost:${port}`}`;
 }

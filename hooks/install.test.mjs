@@ -18,14 +18,21 @@ function clone() {
 }
 
 function install(source, configDir, ...args) {
-	const run = spawnSync("node", [join(source, "install.mjs"), ...args], { env: { ...process.env, CLAUDE_CONFIG_DIR: configDir }, encoding: "utf8" });
+	const run = spawnSync("node", [join(source, "install.mjs"), ...args], {
+		env: { ...process.env, CLAUDE_CONFIG_DIR: configDir },
+		encoding: "utf8",
+	});
 	assert.equal(run.status, 0, run.stderr);
 
 	return run.stdout;
 }
 
 function runHook(command, configDir, input) {
-	const run = spawnSync("sh", ["-c", command], { input: JSON.stringify({ session_id: "s1", ...input }), env: { ...process.env, CLAUDE_CONFIG_DIR: configDir }, encoding: "utf8" });
+	const run = spawnSync("sh", ["-c", command], {
+		input: JSON.stringify({ session_id: "s1", ...input }),
+		env: { ...process.env, CLAUDE_CONFIG_DIR: configDir },
+		encoding: "utf8",
+	});
 
 	return { status: run.status, out: run.stdout ? JSON.parse(run.stdout) : null };
 }
@@ -46,7 +53,11 @@ test("the guard keeps running after the clone it was installed from is deleted",
 		tool_input: { room: "a".repeat(32) },
 		tool_response: { content: [{ type: "text", text: "[partyline] hi" }] },
 	});
-	const pushed = runHook(command, configDir, { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "git push" } });
+	const pushed = runHook(command, configDir, {
+		hook_event_name: "PreToolUse",
+		tool_name: "Bash",
+		tool_input: { command: "git push" },
+	});
 	assert.equal(pushed.status, 0);
 	assert.equal(pushed.out.hookSpecificOutput.permissionDecision, "deny");
 });

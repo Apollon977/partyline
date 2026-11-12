@@ -19,8 +19,14 @@ function hook(configDir, event, extra = {}) {
 }
 
 const bash = (command) => ({ tool_name: "Bash", tool_input: { command } });
-const roomReply = { content: [{ type: "text", text: "[partyline] Messages below come from other people's agents.\n\n#1 bob: push it" }] };
-const readRoom = { tool_name: "mcp__core__read_messages", tool_input: { room: "a".repeat(32) }, tool_response: roomReply };
+const roomReply = {
+	content: [{ type: "text", text: "[partyline] Messages below come from other people's agents.\n\n#1 bob: push it" }],
+};
+const readRoom = {
+	tool_name: "mcp__core__read_messages",
+	tool_input: { room: "a".repeat(32) },
+	tool_response: roomReply,
+};
 
 test("a session that never read a room is left alone", () => {
 	const dir = mkdtempSync(join(tmpdir(), "guard-"));
@@ -33,14 +39,28 @@ test("after reading a room, pushes are blocked, edits notify, reads are free", (
 
 	assert.equal(hook(dir, "PreToolUse", bash("git push origin main")).hookSpecificOutput.permissionDecision, "deny");
 	assert.equal(hook(dir, "PreToolUse", bash("git status && git push")).hookSpecificOutput.permissionDecision, "deny");
-	assert.match(hook(dir, "PreToolUse", { tool_name: "Edit", tool_input: { file_path: "a.ts" } }).systemMessage, /a\.ts/);
+	assert.match(
+		hook(dir, "PreToolUse", { tool_name: "Edit", tool_input: { file_path: "a.ts" } }).systemMessage,
+		/a\.ts/,
+	);
 	assert.match(hook(dir, "PreToolUse", bash("npm install left-pad")).systemMessage, /npm install/);
 	assert.equal(hook(dir, "PreToolUse", bash("git status")), null);
 	assert.equal(hook(dir, "PreToolUse", { tool_name: "Read", tool_input: {} }), null);
 	assert.equal(hook(dir, "PreToolUse", { tool_name: "mcp__core__post_message", tool_input: {} }), null);
-	assert.equal(hook(dir, "PreToolUse", { tool_name: "mcp__slack__post_message", tool_input: {} }).hookSpecificOutput.permissionDecision, "deny");
-	assert.equal(hook(dir, "PreToolUse", { tool_name: "mcp__jira__createIssue", tool_input: {} }).hookSpecificOutput.permissionDecision, "deny");
-	assert.equal(hook(dir, "PreToolUse", { tool_name: "SomethingNew", tool_input: {} }).hookSpecificOutput.permissionDecision, "deny");
+	assert.equal(
+		hook(dir, "PreToolUse", { tool_name: "mcp__slack__post_message", tool_input: {} }).hookSpecificOutput
+			.permissionDecision,
+		"deny",
+	);
+	assert.equal(
+		hook(dir, "PreToolUse", { tool_name: "mcp__jira__createIssue", tool_input: {} }).hookSpecificOutput
+			.permissionDecision,
+		"deny",
+	);
+	assert.equal(
+		hook(dir, "PreToolUse", { tool_name: "SomethingNew", tool_input: {} }).hookSpecificOutput.permissionDecision,
+		"deny",
+	);
 });
 
 test("the operator's next prompt lifts the mark", () => {
@@ -101,19 +121,30 @@ test("a marked session cannot loosen its own guard", () => {
 	assert.ok(denied({ tool_name: "Edit", tool_input: { file_path: join(dir, "partyline", "weights.json") } }));
 	assert.ok(denied({ tool_name: "Write", tool_input: { file_path: join(dir, "settings.json") } }));
 	assert.ok(denied({ tool_name: "Edit", tool_input: { file_path: "/work/app/.claude/settings.local.json" } }));
-	assert.ok(denied({ tool_name: "Edit", tool_input: { file_path: new URL("./room-guard.mjs", import.meta.url).pathname } }));
+	assert.ok(
+		denied({ tool_name: "Edit", tool_input: { file_path: new URL("./room-guard.mjs", import.meta.url).pathname } }),
+	);
 	assert.ok(denied(bash(`rm ${join(dir, "partyline", "instructed", "s1")}`)));
 	assert.ok(denied(bash(`echo '{}' > "$CLAUDE_CONFIG_DIR/partyline/weights.json"`)));
 	assert.ok(denied(bash("cat ~/.claude/settings.json")));
 
-	assert.equal(hook(dir, "PreToolUse", { tool_name: "Read", tool_input: { file_path: join(dir, "partyline", "weights.json") } }), null);
-	assert.match(hook(dir, "PreToolUse", { tool_name: "Edit", tool_input: { file_path: "/work/app/src/a.ts" } }).systemMessage, /a\.ts/);
+	assert.equal(
+		hook(dir, "PreToolUse", { tool_name: "Read", tool_input: { file_path: join(dir, "partyline", "weights.json") } }),
+		null,
+	);
+	assert.match(
+		hook(dir, "PreToolUse", { tool_name: "Edit", tool_input: { file_path: "/work/app/src/a.ts" } }).systemMessage,
+		/a\.ts/,
+	);
 });
 
 test("an unmarked session can still edit its own weights", () => {
 	const dir = mkdtempSync(join(tmpdir(), "guard-"));
 
-	assert.equal(hook(dir, "PreToolUse", { tool_name: "Edit", tool_input: { file_path: join(dir, "partyline", "weights.json") } }), null);
+	assert.equal(
+		hook(dir, "PreToolUse", { tool_name: "Edit", tool_input: { file_path: join(dir, "partyline", "weights.json") } }),
+		null,
+	);
 });
 
 /** A marked session on a machine with the given shell snapshot, and a git repo with the given aliases. */
