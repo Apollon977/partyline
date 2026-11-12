@@ -56,7 +56,7 @@ jobs:
               return subprocess.check_output(['git', *args], text=True)
           
           original = git_text('rev-parse', 'HEAD').strip()
-          assert original == '24a0c55dea52f07f78f33ed98b34333834b0a13b', 'PR branch changed; review before proceeding'
+          assert original == '3435850f00112ced427f8cb25af0b710f4601729', 'PR branch changed; review before proceeding'
           base = git_text('rev-parse', 'upstream/main').strip()
           expected = os.environ.get('EXPECTED_BASE', '')
           assert not expected or expected == base, 'Upstream changed since preview'
@@ -91,14 +91,9 @@ jobs:
           note = '- `npm/pnpm/yarn version` and `docker compose down` have their own approve patterns, so they still need approval if you change `bash.default`.'
           doc_lines.insert(positions[0] + 1, note)
           files[paths[2]] = newline.join(doc_lines) + newline
-          rebased = subprocess.run(['git', 'rebase', 'upstream/main'], env=dict(os.environ, GIT_EDITOR='true'))
-          if rebased.returncode:
-              conflicts = set(git_text('diff', '--name-only', '--diff-filter=U').splitlines())
-              assert conflicts and conflicts <= set(paths), 'Unexpected rebase conflict; stop for review'
-              for path, content in files.items():
-                  Path(path).write_text(content)
-              subprocess.run(['git', 'add', *paths], check=True)
-              subprocess.run(['git', 'rebase', '--continue'], env=dict(os.environ, GIT_EDITOR='true'), check=True)
+          assert git_text('show', original + ':.github/workflows/ci.yml') == git_text('show', 'upstream/main:.github/workflows/ci.yml'), 'CI must exactly match upstream'
+          subprocess.run(['git', 'reset', '--hard', 'upstream/main'], check=True)
+          subprocess.run(['git', 'commit', '--allow-empty', '-C', '36048b3e8d22dfaa7f2beffd22cd048b7837b71d'], check=True)
           for path, content in files.items():
               Path(path).write_text(content)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
@@ -174,8 +169,8 @@ jobs:
           EXPECTED_BASE: ${{ needs.prepare.outputs.base_sha }}
           VALIDATED_HEAD: ${{ needs.prepare.outputs.head_sha }}
         run: |
-          test "$(git rev-parse HEAD)" = 24a0c55dea52f07f78f33ed98b34333834b0a13b
+          test "$(git rev-parse HEAD)" = 3435850f00112ced427f8cb25af0b710f4601729
           git fetch "$RUNNER_TEMP/pr15/pr15.bundle" HEAD
           test "$(git rev-parse FETCH_HEAD)" = "$VALIDATED_HEAD"
           git merge-base --is-ancestor "$EXPECTED_BASE" "$VALIDATED_HEAD"
-          git push --force-with-lease=refs/heads/feat/guard-version-and-compose-commands:24a0c55dea52f07f78f33ed98b34333834b0a13b origin "$VALIDATED_HEAD:refs/heads/feat/guard-version-and-compose-commands"
+          git push --force-with-lease=refs/heads/feat/guard-version-and-compose-commands:3435850f00112ced427f8cb25af0b710f4601729 origin "$VALIDATED_HEAD:refs/heads/feat/guard-version-and-compose-commands"
