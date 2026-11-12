@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -197,6 +197,35 @@ test("the operator's own shell aliases are expanded before weighing", () => {
 	assert.equal(weigh("grep -r foo ."), "free", "a self-referencing alias does not loop");
 	assert.equal(weigh("\\ls"), "free", "a backslash skips the alias, as in the shell");
 	assert.equal(weigh("gs; gs"), "free", "the same alias twice in one line expands both times");
+});
+
+test("version changes and Compose shutdowns have explicit approve weights", (t) => {
+	const dir = mkdtempSync(join(tmpdir(), "guard-"));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	hook(dir, "PostToolUse", readRoom);
+	const weights = JSON.parse(readFileSync(new URL("./weights.json", import.meta.url), "utf8"));
+	// The explicit rules must work independently of the unknown-command fallback.
+	weights.bash.default = "free";
+	writeFileSync(join(dir, "partyline", "weights.json"), JSON.stringify(weights));
+
+	for (const command of [
+		"npm version patch",
+		"pnpm version minor",
+		"yarn version --new-version 1.2.3",
+		"docker compose down",
+		"docker compose down -v",
+		"docker-compose down --volumes",
+	]) {
+		assert.equal(hook(dir, "PreToolUse", bash(command))?.hookSpecificOutput?.permissionDecision, "deny", command);
+	}
+	for (const command of ["npm view example version", "pnpm --version", "yarn --version"]) {
+		assert.equal(hook(dir, "PreToolUse", bash(command)), null, command);
+	}
+	for (const command of ["docker compose ps", "docker compose logs"]) {
+		const result = hook(dir, "PreToolUse", bash(command));
+		assert.match(result.systemMessage, /partyline:/, command);
+		assert.equal(result.hookSpecificOutput, undefined, command);
+	}
 });
 
 test("shell functions and unrecognised commands need approval", () => {

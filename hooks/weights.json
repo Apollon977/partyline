@@ -36,6 +36,8 @@
 			"\\bgh\\s+(pr\\s+(merge|create|close|comment|review|edit|ready)|issue|release|repo|api|secret|workflow\\s+run)\\b",
 			"\\b(wrangler|vercel|netlify|flyctl|vapor|firebase|heroku)\\b.*\\b(deploy|publish|secret|delete|rollback)\\b",
 			"\\b(npm|pnpm|yarn)\\s+publish\\b",
+			"\\b(npm|pnpm|yarn)\\s+version\\b",
+			"\\b(docker\\s+compose|docker-compose)\\s+down\\b",
 			"\\brm\\s+-[a-zA-Z]*[rf]",
 			"\\bfind\\b.*\\s-(delete|exec)\\b",
 			"\\b(curl|wget|http)\\b.*(\\s-X\\s*(POST|PUT|PATCH|DELETE)|\\s--data|\\s-d\\s|\\s--upload-file|\\s-F\\s)",

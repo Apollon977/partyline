@@ -42,6 +42,7 @@ The installer copies the defaults to `<config dir>/partyline/weights.json`, wher
 
 - `tools` lists names or `prefix*` globs per weight. The most specific match wins.
 - `bash` lists regexes per weight. Each part of a compound command is weighed separately, and the heaviest part wins.
+- `npm/pnpm/yarn version` and `docker compose down` have their own approve patterns, so they still need approval if you change `bash.default`.
 - The hook recognises a room server by its reply, not its name.
 - Decisions are logged to `<config dir>/partyline/log.jsonl`.
 
