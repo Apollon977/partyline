@@ -7,14 +7,11 @@
 			"Glob",
 			"LS",
 			"LSP",
-			"WebFetch",
-			"WebSearch",
 			"TodoWrite",
 			"ToolSearch",
 			"Agent",
 			"Task",
 			"Skill",
-			"Monitor",
 			"TaskStop",
 			"AskUserQuestion"
 		],
@@ -24,14 +21,14 @@
 	"bash": {
 		"default": "approve",
 		"free": [
-			"^(git\\s+(status|diff|log|show|branch|fetch|rev-parse|rev-list|merge-base|ls-files|blame|grep|describe|shortlog|reflog|cat-file|config\\s+--get|remote\\s+-v)|cd|ls|cat|head|tail|wc|grep|rg|pwd|echo|printf|which|jq|tree|find|diff|sort|uniq|cut|tr|basename|dirname|realpath|stat|file|date|true|false|test|sed\\s+-n|node\\s+-v|npm\\s+(ls|view|test|run\\s+(test|check|lint))|npx\\s+tsc|php\\s+artisan\\s+(test|route:list)|vendor/bin/(pest|phpunit|phpstan)|composer\\s+show)\\b"
+			"^(git\\s+(status|diff|log|show|branch|fetch|rev-parse|rev-list|merge-base|ls-files|blame|grep|describe|shortlog|reflog|cat-file|config\\s+--get|remote\\s+-v)|cd|ls|cat|head|tail|wc|grep|rg|pwd|echo|printf|which|jq|tree|find|diff|sort|uniq|cut|tr|basename|dirname|realpath|stat|file|date|true|false|test|sed\\s+-n\\s+'?\\d+(,\\d+)?p'?|node\\s+-v|npm\\s+(ls|view|test|run\\s+(test|check|lint))|npx\\s+tsc|php\\s+artisan\\s+(test|route:list)|vendor/bin/(pest|phpunit|phpstan)|composer\\s+show)(?=\\s|$)"
 		],
 		"notify": [
 			"^git\\s+(add|commit|checkout|switch|restore|stash|pull|mv|rm|cherry-pick|revert|init|clone|worktree\\s+(add|list))\\b",
-			"^(npm|pnpm|yarn|bun)\\s+(install|i|ci|add|remove|uninstall|run\\s+(build|dev|start|format|typecheck))\\b",
+			"^(npm|pnpm|yarn|bun)\\s+(remove|uninstall|run\\s+(build|dev|start|format|typecheck))\\b",
 			"^npx\\s+(prettier|eslint|biome|vitest|jest|playwright\\s+test)\\b",
-			"^(composer\\s+(install|require|update|dump-autoload)|pip3?\\s+install|pytest|python3?\\s+-m\\s+pytest|cargo\\s+(build|test|check|fmt|clippy)|go\\s+(build|test|vet|fmt|mod\\s+tidy)|tsc|prettier|eslint|mkdir|touch|cp|mv|chmod)\\b",
-			"^docker\\s+(build|ps|images|logs|compose\\s+(build|up|ps|logs|config))\\b"
+			"^(cargo\\s+(build|test|check|fmt|clippy)|pytest|python3?\\s+-m\\s+pytest|go\\s+(build|test|vet|fmt|mod\\s+tidy)|tsc|prettier|eslint|mkdir|touch|cp|mv|chmod)\\b",
+			"^docker\\s+(build|ps|images|logs|compose\\s+(build|ps|logs|config))\\b"
 		],
 		"approve": [
 			"\\bgit\\s+(push|merge|rebase|reset\\s+--hard|clean|tag|branch\\s+-D|filter-branch)\\b",
@@ -45,7 +42,23 @@
 			"\\b(ssh|scp|rsync|kubectl|terraform|helm|aws|gcloud|az)\\b",
 			"\\bphp\\s+artisan\\s+(migrate|db:|tinker)",
 			"\\b(sudo|security|claude\\s+mcp)\\b",
-			"\\bdocker\\s+(push|rm|rmi|system|volume\\s+rm)\\b"
+			"\\bdocker\\s+(push|rm|rmi|system|volume\\s+rm)\\b",
+			"\\bgit\\s+grep\\b.*\\s(-O|--open-files-in-pager)",
+			"\\bgit\\s+\\S+.*\\s--(upload-pack|receive-pack|exec)\\b",
+			"\\bgit\\s+\\S+.*\\s--output\\b",
+			"\\bgit\\s+branch\\b.*\\s(-[a-zA-Z]*[DfMC]|--force|--delete)\\b",
+			"\\bgit\\s+reflog\\s+(expire|delete)\\b",
+			"\\bgit\\s+checkout\\b.*\\s(--|\\.|-f|--force)(\\s|$)",
+			"\\bgit\\s+switch\\b.*\\s(-f|--force|--discard-changes)\\b",
+			"\\bgit\\s+restore\\b(?!(?=.*\\s(--staged|-S)(\\s|$))(?!.*\\s(--worktree|-W)(\\s|$)))",
+			"\\brg\\b.*\\s--(pre|hostname-bin)\\b",
+			"\\bfind\\b.*\\s-(execdir|ok|okdir|fprint0?|fprintf|fls)\\b",
+			"\\b(sort|tree)\\b.*\\s(-[a-zA-Z]*o|--output)",
+			"^uniq(\\s+-[a-zA-Z]+)*\\s+[^-\\s]\\S*\\s+[^-\\s]",
+			"\\b(npm|pnpm|yarn|bun)\\b.*\\s--(script-shell|node-options)\\b",
+			"\\b(npm|pnpm|yarn|bun)\\s+(install|i|ci|add)\\b",
+			"\\b(pip3?\\s+install|composer\\s+(install|require|update))\\b",
+			"\\bdocker\\s+compose\\s+(up|run)\\b"
 		]
 	}
 }

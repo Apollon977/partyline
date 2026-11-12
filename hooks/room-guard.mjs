@@ -17,6 +17,12 @@
  * Shell commands are weighed as they will really run on this machine: the operator's own
  * shell aliases (from the shell snapshot Claude Code runs Bash in) and git aliases are
  * expanded first, shell functions need approval, and so does anything not recognised.
+ *
+ * Some rules hold whatever the weights say, because a room must never be able to write
+ * outside the project or run code through a "free" command: output redirections, writes
+ * outside the project or into .git, git -c, unknown environment variables, and the Monitor
+ * tool's command all get weighed here first. Nor may it read secrets or files outside the
+ * project, or reach the network, so those need approval too.
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -25,12 +31,13 @@ import {
 	mkdirSync,
 	readdirSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	statSync,
 	writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TIERS = ["free", "notify", "approve"];
@@ -52,6 +59,38 @@ const hooksDir = dirname(fileURLToPath(import.meta.url));
 
 /** Tools that only read: touching the guard's own files with these is harmless. */
 const READ_ONLY_TOOLS = new Set(["Read", "Grep", "Glob", "LS", "NotebookRead"]);
+
+/** Tools that write to the path they're given. */
+const WRITE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
+
+/** Tools that read the path or glob they're given. */
+const READ_TOOLS = new Set(["Read", "NotebookRead", "Grep", "Glob", "LS"]);
+
+/** Tools that reach the network, so could send out anything the session has read. */
+const NETWORK_TOOLS = new Set(["WebFetch", "WebSearch"]);
+
+/** File names that usually hold secrets. Examples and templates of them don't. */
+const SECRET_NAMES = [
+	/^\.env(\..+)?$/i,
+	/^\.dev\.vars$/i,
+	/^\.(npmrc|pypirc|netrc|pgpass|git-credentials|htpasswd)$/i,
+	/^(credentials|auth|secrets?)(\.[a-z]+)?$/i,
+	/\.(pem|key|p12|pfx|jks|keystore)$/i,
+	/^id_(rsa|dsa|ecdsa|ed25519)$/i,
+];
+const NOT_SECRET = /\.(example|sample|template|dist)$/i;
+
+/** Shell commands that write to their path arguments. */
+const WRITERS = new Set(["cp", "mv", "mkdir", "touch", "chmod", "ln", "install", "tee", "rm", "rmdir"]);
+
+/** Environment variables a command may set without changing what it runs. */
+const SAFE_ENV = /^(LANG|LC_[A-Z]+|TZ|CI|NO_COLOR|FORCE_COLOR|NODE_ENV)$/;
+
+/** Where output may be redirected without writing a file. */
+const SAFE_TARGETS = new Set(["/dev/null", "/dev/stdout", "/dev/stderr"]);
+
+/** A path argument the guard can resolve: no globs, quotes, variables, ~ or escapes. */
+const PLAIN_PATH = /^[A-Za-z0-9_.\/@%+,:=-]+$/;
 
 /** Words that, in a shell command, point at the guard or Claude Code's settings. */
 const GUARD_WORDS = ["partyline", ".claude", "claude_config_dir", "settings.json", "settings.local.json", "room-guard"];
@@ -221,10 +260,13 @@ function commandParts(command) {
 	return parts.map((part) => part.trim()).filter(Boolean);
 }
 
-/** Git options that may come before the subcommand, and whether they take a value. */
+/**
+ * Git options that may come before the subcommand, and whether they take a value.
+ * -c and --config-env are left out on purpose: they set config such as core.pager or
+ * core.fsmonitor, which runs commands, so they make git need approval.
+ */
 const GIT_OPTIONS = {
 	"-C": true,
-	"-c": true,
 	"--git-dir": true,
 	"--work-tree": true,
 	"--namespace": true,
@@ -283,13 +325,26 @@ function normalizeGit(args, cwd, seen) {
  * needs approval, and git options and aliases are resolved. Then the patterns decide.
  */
 function weighPart(part, bash, context, seen) {
-	const command = part.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"[^"]*"|\S*)\s+)+/, "");
+	const assignments = part.match(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"[^"]*"|\S*)\s+)+/)?.[0] ?? "";
+	if (assignments.match(/[A-Za-z_][A-Za-z0-9_]*(?==)/g)?.some((variable) => !SAFE_ENV.test(variable))) {
+		return "approve";
+	}
+	if (redirectsToFile(part)) {
+		return "approve";
+	}
+	const command = part.slice(assignments.length);
+	if (!argumentsSafeToRead(command, context.cwd)) {
+		return "approve";
+	}
 	const match = command.match(/^(\S+)(.*)$/s);
 	if (!match) {
 		return "free";
 	}
 	const [, word, args] = match;
 	const name = unquote(word);
+	if (WRITERS.has(name) && !writesInsideProject(name, args, context)) {
+		return "approve";
+	}
 
 	if (!word.startsWith("\\") && context.shell.aliases.has(name) && !seen.has(name)) {
 		seen.add(name);
@@ -323,14 +378,216 @@ function weighPart(part, bash, context, seen) {
 				: (bash.default ?? "approve");
 }
 
-/** Each simple command in a command line is weighed on its own; the heaviest wins. */
+/**
+ * Each simple command in a command line is weighed on its own; the heaviest wins. A cd
+ * anywhere in the line means relative paths can't be resolved, so writers need approval.
+ */
 function weighCommand(command, bash, context, seen = new Set()) {
+	const parts = commandParts(command);
+	const moved = context.moved || parts.some((part) => /^(cd|pushd|popd)(\s|$)/.test(part));
 	let weight = "free";
-	for (const part of commandParts(command)) {
-		weight = higher(weighPart(part, bash, context, new Set(seen)), weight);
+	for (const part of parts) {
+		weight = higher(weighPart(part, bash, { ...context, moved }, new Set(seen)), weight);
 	}
 
 	return weight;
+}
+
+/**
+ * Whether a simple command sends output to a file: >, >>, >|, &> or &>>, except to /dev/null.
+ * Quoted text is blanked first, so grep "=>" isn't a redirection, but a quoted target still is.
+ */
+function redirectsToFile(part) {
+	const unquoted = part.replace(/'[^']*'|"(?:\\.|[^"\\])*"/g, "''");
+	for (const [, target] of unquoted.matchAll(/(?:^|[^<>&\d])\d*(?:>>?|>\||&>>?)(?!&)\s*(\S*)/g)) {
+		if (!SAFE_TARGETS.has(target)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Splits a simple command into words as the shell would, noting for each whether it has an
+ * unquoted glob (*, ?, [, {) or anything expanded at run time ($, `).
+ */
+function shellWords(part) {
+	const words = [];
+	let word = null;
+	const add = (text, flags = {}) => {
+		word ??= { text: "", glob: false, dynamic: false };
+		word.text += text;
+		word.glob ||= Boolean(flags.glob);
+		word.dynamic ||= Boolean(flags.dynamic);
+	};
+	for (let i = 0; i < part.length; i++) {
+		const c = part[i];
+		if (/\s/.test(c)) {
+			if (word) words.push(word);
+			word = null;
+		} else if (c === "'") {
+			const end = part.indexOf("'", i + 1);
+			add(part.slice(i + 1, end < 0 ? part.length : end));
+			i = end < 0 ? part.length : end;
+		} else if (c === '"') {
+			add("");
+			for (i++; i < part.length && part[i] !== '"'; i++) {
+				if (part[i] === "\\" && i + 1 < part.length) {
+					add(part[++i]);
+				} else {
+					add(part[i], { dynamic: part[i] === "$" || part[i] === "`" });
+				}
+			}
+		} else if (c === "\\" && i + 1 < part.length) {
+			add(part[++i]);
+		} else {
+			add(c, { glob: "*?[{".includes(c), dynamic: c === "$" || c === "`" });
+		}
+	}
+	if (word) words.push(word);
+
+	return words;
+}
+
+/** Whether a file name looks like it holds secrets. */
+function isSecretName(name) {
+	return !NOT_SECRET.test(name) && SECRET_NAMES.some((pattern) => pattern.test(name));
+}
+
+/** Folders outside the project a marked session may still read: the guard's own, and Claude Code's tool output. */
+function readableOutside(full) {
+	const path = full.toLowerCase();
+	const under = (dir) => path.startsWith(`${realPath(dir).toLowerCase()}/`);
+
+	return SAFE_TARGETS.has(full) || under(stateDir) || under(join(configDir, "projects"));
+}
+
+/**
+ * Whether a word may be read without approval: nothing expanded at run time, no secret file
+ * name (a glob that could match a hidden file counts as one), and when it is a path that can
+ * leave the folder (/…, ~…, ..), one that stays in the project.
+ */
+function safeToRead(word, cwd) {
+	if (word.dynamic) {
+		return false;
+	}
+	const text = word.text.replace(/^\d*[<>]+&?/, "");
+	const segments = text.split(/[/:]/);
+	for (const segment of segments) {
+		const hidden = word.glob && segment.startsWith(".") && /[*?[{]/.test(segment);
+		if (hidden || isSecretName(word.glob ? segment.replace(/[*?]/g, "x") : segment)) {
+			return false;
+		}
+	}
+	if (word.glob && /[[{]/.test(text)) {
+		return false;
+	}
+	if (!text.startsWith("/") && !text.startsWith("~") && !segments.includes("..")) {
+		return true;
+	}
+	const full = realPath(absolute(text, cwd));
+	const inner = relative(projectRoot(cwd), full);
+
+	return (!inner.startsWith("..") && !isAbsolute(inner)) || readableOutside(full);
+}
+
+/** Whether every argument of a simple command may be read without approval. */
+function argumentsSafeToRead(command, cwd) {
+	const [name, ...args] = shellWords(command);
+	if (/^(cd|pushd)$/.test(name?.text ?? "") && (args.length === 0 || args[0].text === "-")) {
+		return false;
+	}
+	if (name?.text === "popd" || (name?.text === "jq" && args.some((arg) => /\$ENV|\benv\b/.test(arg.text)))) {
+		return false;
+	}
+
+	return args.every((arg) => {
+		const value = arg.text.match(/^-[^=]*=(.*)$/s)?.[1];
+
+		return safeToRead(value === undefined ? arg : { ...arg, text: value }, cwd);
+	});
+}
+
+/** The real path of p, following symlinks and case as far as the path exists. */
+function realPath(p) {
+	let existing = p;
+	while (!existsSync(existing) && dirname(existing) !== existing) {
+		existing = dirname(existing);
+	}
+	try {
+		return join(realpathSync.native(existing), relative(existing, p));
+	} catch {
+		return p;
+	}
+}
+
+const roots = new Map();
+
+/** The top of the git repo the session works in, or its folder when it isn't one. */
+function projectRoot(cwd) {
+	const dir = cwd ?? process.cwd();
+	if (!roots.has(dir)) {
+		const top = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: dir, encoding: "utf8", timeout: 2000 });
+		roots.set(dir, realPath(top.status === 0 && top.stdout.trim() ? top.stdout.trim() : dir));
+	}
+
+	return roots.get(dir);
+}
+
+/** Expands ~ and makes a path absolute against the session's folder. */
+function absolute(p, cwd) {
+	const home = p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p;
+
+	return isAbsolute(home) ? resolve(home) : resolve(cwd ?? process.cwd(), home);
+}
+
+/**
+ * Whether the guard's own files or Claude Code settings are at this path. Compared without
+ * case, since macOS paths ignore it.
+ */
+function isGuardPath(full) {
+	const path = realPath(full).toLowerCase();
+	const under = (dir) => path.startsWith(`${realPath(dir).toLowerCase()}/`);
+
+	return (
+		under(stateDir) ||
+		under(hooksDir) ||
+		path.includes("/.claude/") ||
+		/^settings(\.local)?\.json$/.test(basename(path))
+	);
+}
+
+/** Whether a path is inside the project, outside its .git folder, and not the guard's. */
+function insideProject(p, cwd) {
+	const full = realPath(absolute(p, cwd));
+	const inner = relative(projectRoot(cwd), full);
+
+	return !inner.startsWith("..") && !isAbsolute(inner) && !/^\.git(\/|$)/i.test(inner) && !isGuardPath(full);
+}
+
+/**
+ * Whether every path a writer (cp, mv, mkdir…) is given is a plain path inside the project.
+ * Options must be plain flags; --option=value has its value checked as a path.
+ */
+function writesInsideProject(name, args, context) {
+	const words = args.trim().split(/\s+/).filter(Boolean);
+	const paths = [];
+	for (const word of words) {
+		if (/^-{1,2}[A-Za-z][A-Za-z-]*$/.test(word) || word === "--") {
+			continue;
+		}
+		const option = word.match(/^--[A-Za-z][A-Za-z-]*=(.*)$/);
+		if (word.startsWith("-") && !option) {
+			return false;
+		}
+		paths.push(option ? option[1] : word);
+	}
+	if (name === "chmod") {
+		paths.shift();
+	}
+
+	return paths.every((p) => PLAIN_PATH.test(p) && !context.moved && insideProject(p, context.cwd));
 }
 
 /**
@@ -339,7 +596,7 @@ function weighCommand(command, bash, context, seen = new Set()) {
  * A marked session must not be able to loosen its own guard.
  */
 function touchesGuard(toolName, toolInput, cwd) {
-	if (toolName === "Bash") {
+	if (toolName === "Bash" || toolName === "Monitor") {
 		const command = String(toolInput?.command ?? "").toLowerCase();
 
 		return [...GUARD_WORDS, configDir.toLowerCase(), hooksDir.toLowerCase()].some((word) => command.includes(word));
@@ -347,16 +604,42 @@ function touchesGuard(toolName, toolInput, cwd) {
 
 	const paths = [toolInput?.file_path, toolInput?.notebook_path, toolInput?.path].filter((p) => typeof p === "string");
 
-	return paths.some((p) => {
-		const full = isAbsolute(p) ? resolve(p) : resolve(cwd ?? process.cwd(), p);
+	return paths.some((p) => isGuardPath(absolute(p, cwd)));
+}
 
-		return (
-			full.startsWith(`${stateDir}/`) ||
-			full.startsWith(`${hooksDir}/`) ||
-			full.includes("/.claude/") ||
-			/^settings(\.local)?\.json$/.test(basename(full))
+/** Weighs an action by its tool: the rules that hold whatever the weights say, then the weights. */
+function weighAction(toolName, toolInput, weights, cwd) {
+	if (toolName === "Bash" || toolName === "Monitor") {
+		if (toolName === "Monitor" && typeof toolInput?.command !== "string") {
+			return "approve";
+		}
+
+		return weighCommand(toolInput?.command, weights.bash, { shell: loadShell(), cwd });
+	}
+	const path = toolInput?.file_path ?? toolInput?.notebook_path;
+	if (WRITE_TOOLS.has(toolName) && typeof path === "string" && !insideProject(path, cwd)) {
+		return "approve";
+	}
+	if (NETWORK_TOOLS.has(toolName)) {
+		return "approve";
+	}
+	if (READ_TOOLS.has(toolName)) {
+		const paths = [toolInput?.file_path, toolInput?.notebook_path, toolInput?.path].filter(
+			(p) => typeof p === "string",
 		);
-	});
+		const globs = [toolInput?.glob, toolName === "Glob" ? toolInput?.pattern : undefined].filter(
+			(g) => typeof g === "string",
+		);
+		const words = [
+			...paths.map((text) => ({ text, glob: false, dynamic: false })),
+			...globs.map((text) => ({ text, glob: true, dynamic: false })),
+		];
+		if (!words.every((word) => safeToRead(word, cwd))) {
+			return "approve";
+		}
+	}
+
+	return weighTool(toolName, weights.tools);
 }
 
 function describe(toolName, toolInput) {
@@ -423,11 +706,7 @@ switch (input.hook_event_name) {
 		const weights = loadWeights();
 		const toolName = input.tool_name ?? "";
 		const guarded = !READ_ONLY_TOOLS.has(toolName) && touchesGuard(toolName, input.tool_input, input.cwd);
-		const weight = guarded
-			? "approve"
-			: toolName === "Bash"
-				? weighCommand(input.tool_input?.command, weights.bash, { shell: loadShell(), cwd: input.cwd })
-				: weighTool(toolName, weights.tools);
+		const weight = guarded ? "approve" : weighAction(toolName, input.tool_input, weights, input.cwd);
 		const action = describe(toolName, input.tool_input);
 		log({ session: sessionId, event: "weighed", weight, action, ...(guarded ? { guarded: true } : {}) });
 

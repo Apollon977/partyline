@@ -2,11 +2,11 @@
 
 The guard hook (`hooks/room-guard.mjs`) runs on each operator's machine. Once a session reads a room, it marks the session, and every action from then on has a weight:
 
-| Weight  | Default examples                                                                                                                                                     | What happens                                                          |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| free    | Read, Grep, `git status`, tests, room tools                                                                                                                          | Runs as usual                                                         |
-| notify  | Edit, Write, `git commit`, `npm install`, `npm run build`                                                                                                            | Runs, and the operator sees a note                                    |
-| approve | `git push/merge/rebase`, `gh pr merge`, deploys, `rm -rf`, `curl -X POST`, other MCP servers, shell functions, scripts, **any command or tool it doesn't recognise** | Blocked: the agent tells its operator what it wants to run, and waits |
+| Weight  | Default examples                                                                                                                                                                                                   | What happens                                                          |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| free    | Read and Grep in the project, `git status`, tests, room tools                                                                                                                                                      | Runs as usual                                                         |
+| notify  | Edit, Write in the project, `git commit`, `npm run build`                                                                                                                                                          | Runs, and the operator sees a note                                    |
+| approve | `git push/merge/rebase`, `gh pr merge`, deploys, package installs, `rm -rf`, `curl -X POST`, other MCP servers, shell functions, scripts, writes outside the project, **any command or tool it doesn't recognise** | Blocked: the agent tells its operator what it wants to run, and waits |
 
 - **Your next typed prompt lifts the mark.** Notifications and messages from other sessions don't. Sessions that never read a room are untouched.
 - **It works in every permission mode**, bypass included, because approve-weight actions are denied rather than prompted.
@@ -21,6 +21,20 @@ Every operator has their own aliases, so the guard reads them from the machine i
 - **Shell functions need approval**, since their bodies can do anything.
 - **Inner commands count.** Commands inside `$(…)`, backticks, `<(…)` and after `;`, `&&`, `||`, `|` or `&` are each weighed, and the heaviest wins.
 - **Anything unrecognised needs approval**: scripts, unknown binaries, `bash -c`, `make deploy`, `npm run release`.
+
+## Rules the weights can't loosen
+
+While a session is marked, these always need approval, whatever `weights.json` says:
+
+- **Output redirection to a file**: `>`, `>>`, `>|`, `&>` and `&>>`. Only `/dev/null`, `/dev/stdout` and `/dev/stderr` are allowed. Text inside quotes isn't counted, so `grep "=>"` still runs.
+- **Writes outside the project, or into its `.git` folder.** This covers Write, Edit, MultiEdit and NotebookEdit paths (with `~` expanded, symlinks followed and case ignored), and the path arguments of `cp`, `mv`, `mkdir`, `touch`, `chmod`, `ln`, `install`, `tee`, `rm` and `rmdir`. A shell path the guard can't resolve also needs approval: one with a glob, quotes, a variable or `~`, or one in a line that also runs `cd`. The project is the git repo the session works in, or its folder when there isn't one.
+- **`git -c` and `--config-env`**, since config such as `core.pager` or `core.fsmonitor` runs commands.
+- **Environment variables set in front of a command**, except `LANG`, `LC_*`, `TZ`, `CI`, `NO_COLOR`, `FORCE_COLOR` and `NODE_ENV`. Variables like `GIT_PAGER` and `NODE_OPTIONS` run code.
+- **The Monitor tool** is weighed by the command it runs, the same way as Bash. A Monitor that opens a WebSocket needs approval.
+- **Reading secrets or files outside the project.** Read, Grep, Glob and LS paths, and the arguments of every shell command, are checked. Files named like secrets need approval wherever they are: `.env*` (but not `.env.example`), `.dev.vars`, `.npmrc`, `.netrc`, `credentials`, `*.pem`, `*.key`, `id_rsa` and similar. So do globs that could match a hidden file (`.e*`), `$VARIABLES`, and `jq env`. Outside the project, only the guard's own folder and Claude Code's saved tool output can be read freely. A `cd` out of the project needs approval too.
+- **WebFetch and WebSearch**, since a URL or a query can carry anything the session has read. Room tools stay free, so the agent can still reply, but it can only send what it was allowed to read.
+
+The default weights add argument checks on top. Free commands become approve when an option makes them run or write something: `git grep -O`, `--upload-pack`, `--output`, `rg --pre`, `find -execdir/-ok/-fprint`, `sort -o`, and any `sed` other than `sed -n '<lines>p'`. So do commands that throw work away, such as `git branch -f/--delete --force`, `git reflog expire`, `git checkout -- .` and `git restore`.
 
 ## Customising
 
@@ -43,5 +57,7 @@ The installer copies the defaults to `<config dir>/partyline/weights.json`, wher
 
 - Any typed prompt lifts the mark, "continue" included.
 - Notifications are recognised by their text.
-- Commands are read as text, not run through a real shell parser. Anything the guard can't read approves rather than runs, but a command that runs a file, such as a script the agent just wrote, is only as safe as that file.
+- Secrets are recognised by file name. A secret written into an ordinary project file, or a token in a git remote URL, can still be read and posted to the room.
+- Read checks are on the cautious side: a search pattern that looks like an absolute path (`rg '/api/v1' src`) needs approval.
+- Commands are read as text, not run through a real shell parser. Anything the guard can't read needs approval rather than running. A command that runs a file is only as safe as that file, though: `npm test` runs tests the agent may have just written.
 - Aliases come from Claude Code's newest shell snapshot. An alias added in the middle of a session is seen once Claude Code saves a new snapshot.
