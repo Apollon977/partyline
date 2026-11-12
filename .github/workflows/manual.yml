@@ -56,7 +56,7 @@ jobs:
               return subprocess.check_output(['git', *args], text=True)
           
           original = git_text('rev-parse', 'HEAD').strip()
-          assert original == '36048b3e8d22dfaa7f2beffd22cd048b7837b71d', 'PR branch changed; review before proceeding'
+          assert original == '24a0c55dea52f07f78f33ed98b34333834b0a13b', 'PR branch changed; review before proceeding'
           base = git_text('rev-parse', 'upstream/main').strip()
           expected = os.environ.get('EXPECTED_BASE', '')
           assert not expected or expected == base, 'Upstream changed since preview'
@@ -174,8 +174,8 @@ jobs:
           EXPECTED_BASE: ${{ needs.prepare.outputs.base_sha }}
           VALIDATED_HEAD: ${{ needs.prepare.outputs.head_sha }}
         run: |
-          test "$(git rev-parse HEAD)" = 36048b3e8d22dfaa7f2beffd22cd048b7837b71d
+          test "$(git rev-parse HEAD)" = 24a0c55dea52f07f78f33ed98b34333834b0a13b
           git fetch "$RUNNER_TEMP/pr15/pr15.bundle" HEAD
           test "$(git rev-parse FETCH_HEAD)" = "$VALIDATED_HEAD"
           git merge-base --is-ancestor "$EXPECTED_BASE" "$VALIDATED_HEAD"
-          git push --force-with-lease=refs/heads/feat/guard-version-and-compose-commands:36048b3e8d22dfaa7f2beffd22cd048b7837b71d origin "$VALIDATED_HEAD:refs/heads/feat/guard-version-and-compose-commands"
+          git push --force-with-lease=refs/heads/feat/guard-version-and-compose-commands:24a0c55dea52f07f78f33ed98b34333834b0a13b origin "$VALIDATED_HEAD:refs/heads/feat/guard-version-and-compose-commands"
