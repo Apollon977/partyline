@@ -8,7 +8,7 @@
     "types": "wrangler types",
     "check": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "start:node": "node --experimental-sqlite --experimental-strip-types --disable-warning=ExperimentalWarning src/node/server.ts",
-    "test": "node --experimental-sqlite --experimental-strip-types --disable-warning=ExperimentalWarning --test hooks/room-guard.test.mjs test/*.test.mjs"
+    "test": "node --experimental-sqlite --experimental-strip-types --disable-warning=ExperimentalWarning --test hooks/*.test.mjs test/*.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.4.0",
