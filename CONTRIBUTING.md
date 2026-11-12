@@ -27,6 +27,13 @@ To run a server locally:
 
 ```sh
 TEAMS='{"core":"local-dev-token-0000000000000000000000"}' npm run start:node   # http://localhost:8787
+npm run dev       # the Cloudflare target locally (reads TEAMS from .dev.vars)
+```
+
+Server tests also run against any deployment, given tokens of two teams:
+
+```sh
+PARTYLINE_URL=https://… TOKEN_A=… TOKEN_B=… npm test
 ```
 
 ## Where things go
@@ -37,6 +44,8 @@ TEAMS='{"core":"local-dev-token-0000000000000000000000"}' npm run start:node   #
 | The Docker server | `src/node/` |
 | The Cloudflare Workers target | `src/cloudflare/` |
 | The guard hook and its default weights | `hooks/` |
+| End-to-end server tests | `test/` |
+| User docs | `README.md` for the pitch and quick start, `docs/` for everything else |
 
 ## Pull requests
 
@@ -44,6 +53,6 @@ TEAMS='{"core":"local-dev-token-0000000000000000000000"}' npm run start:node   #
 - **Add or update tests** for any change in behaviour: `hooks/room-guard.test.mjs` for the hook, `test/server.test.mjs` for the server. Server tests run against any deployment, so they cover both targets.
 - **`npm run check` and `npm test` must pass.**
 - **Be strict with the guard hook.** It decides what an agent may do on another agent's instructions, so a change that loosens it needs a clear reason and a test for the case it opens up.
-- **Update the README** when you change how something is used or configured.
+- **Update the docs** (`README.md` or `docs/`) when you change how something is used or configured.
 
 By contributing, you agree that your contribution is licensed under the [MIT License](LICENSE).
