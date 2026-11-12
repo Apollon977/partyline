@@ -1,0 +1,181 @@
+name: Prepare PR 15 review fixes
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/manual.yml]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the reviewed update to PR 15
+        type: boolean
+        default: false
+      expected_base:
+        description: Upstream SHA reviewed in the preview run
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: partyline-pr15-review-fix
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository == 'Apollon977/partyline'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      base_sha: ${{ steps.rebase.outputs.base_sha }}
+      head_sha: ${{ steps.bundle.outputs.head_sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/guard-version-and-compose-commands
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/yehia-khalil/partyline.git
+          git fetch upstream main
+          git config user.name 'Aybek Madrakhimov'
+          git config user.email '69151076+Apollon977@users.noreply.github.com'
+      - name: Rebase the focused change
+        id: rebase
+        env:
+          EXPECTED_BASE: ${{ inputs.expected_base }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          
+          def git_text(*args):
+              return subprocess.check_output(['git', *args], text=True)
+          
+          original = git_text('rev-parse', 'HEAD').strip()
+          assert original == '36048b3e8d22dfaa7f2beffd22cd048b7837b71d', 'PR branch changed; review before proceeding'
+          base = git_text('rev-parse', 'upstream/main').strip()
+          expected = os.environ.get('EXPECTED_BASE', '')
+          assert not expected or expected == base, 'Upstream changed since preview'
+          for name in ('AGENTS.md', 'hooks/AGENTS.md', 'docs/AGENTS.md'):
+              found = git_text('ls-tree', '--name-only', 'upstream/main', '--', name).strip()
+              assert not found, 'Review new contributor instructions: ' + name
+          paths = ['hooks/room-guard.test.mjs', 'hooks/weights.json', 'docs/guard.md']
+          files = {path: git_text('show', 'upstream/main:' + path) for path in paths}
+          newline = chr(10)
+          old_test = git_text('show', original + ':' + paths[0])
+          start = old_test.index('test("version changes and Compose shutdowns have explicit approve weights"')
+          end = old_test.index(newline + 'test(', start + 5)
+          block = old_test[start:end]
+          assert 'weights.bash.default = "free"' in block
+          imports = 'mkdtempSync, writeFileSync'
+          assert files[paths[0]].count(imports) == 1
+          files[paths[0]] = files[paths[0]].replace(imports, 'mkdtempSync, readFileSync, rmSync, writeFileSync', 1)
+          anchor = 'test("shell functions and unrecognised commands need approval"'
+          assert files[paths[0]].count(anchor) == 1
+          files[paths[0]] = files[paths[0]].replace(anchor, block + newline + anchor, 1)
+          current_weights = json.loads(files[paths[1]])
+          old_weights = json.loads(git_text('show', original + ':' + paths[1]))
+          approve = current_weights['bash']['approve']
+          extra = [pattern for pattern in old_weights['bash']['approve'] if pattern not in approve]
+          assert len(extra) == 2 and 'version' in extra[0] and 'compose' in extra[1]
+          publish_index = next(index for index, pattern in enumerate(approve) if 'publish' in pattern)
+          approve[publish_index + 1:publish_index + 1] = extra
+          files[paths[1]] = json.dumps(current_weights, indent=chr(9), ensure_ascii=False) + newline
+          doc_lines = files[paths[2]].splitlines()
+          positions = [index for index, line in enumerate(doc_lines) if line.startswith('- `bash` lists regexes') ]
+          assert len(positions) == 1
+          note = '- `npm/pnpm/yarn version` and `docker compose down` have their own approve patterns, so they still need approval if you change `bash.default`.'
+          doc_lines.insert(positions[0] + 1, note)
+          files[paths[2]] = newline.join(doc_lines) + newline
+          rebased = subprocess.run(['git', 'rebase', 'upstream/main'], env=dict(os.environ, GIT_EDITOR='true'))
+          if rebased.returncode:
+              conflicts = set(git_text('diff', '--name-only', '--diff-filter=U').splitlines())
+              assert conflicts and conflicts <= set(paths), 'Unexpected rebase conflict; stop for review'
+              for path, content in files.items():
+                  Path(path).write_text(content)
+              subprocess.run(['git', 'add', *paths], check=True)
+              subprocess.run(['git', 'rebase', '--continue'], env=dict(os.environ, GIT_EDITOR='true'), check=True)
+          for path, content in files.items():
+              Path(path).write_text(content)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('base_sha=' + base + newline)
+          print('UPSTREAM_BASE=' + base)
+          PY
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Apply repository formatting
+        run: |
+          npm run format
+          npm run format:check
+          git diff --check
+      - name: Check and test Node 24
+        run: |
+          npm run check
+          npm test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check and test Node 22
+        run: |
+          npm run check
+          npm test
+      - name: Prepare reviewed commit and patch
+        id: bundle
+        run: |
+          git add hooks/room-guard.test.mjs hooks/weights.json docs/guard.md
+          git commit --amend --no-edit
+          git merge-base --is-ancestor upstream/main HEAD
+          python3 - <<'PY'
+          import os
+          import subprocess
+          expected = {'hooks/room-guard.test.mjs', 'hooks/weights.json', 'docs/guard.md'}
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'upstream/main', 'HEAD'], text=True).splitlines())
+          assert changed == expected, changed
+          assert subprocess.check_output(['git', 'rev-list', '--count', 'upstream/main..HEAD'], text=True).strip() == '1'
+          sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('head_sha=' + sha + chr(10))
+          print('VALIDATED_HEAD=' + sha)
+          PY
+          git diff --check upstream/main HEAD
+          git diff --stat upstream/main HEAD
+          git diff upstream/main HEAD > "$RUNNER_TEMP/pr15.diff"
+          cat "$RUNNER_TEMP/pr15.diff"
+          git bundle create "$RUNNER_TEMP/pr15.bundle" HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr15-review-fix
+          path: |
+            ${{ runner.temp }}/pr15.diff
+            ${{ runner.temp }}/pr15.bundle
+          retention-days: 1
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/guard-version-and-compose-commands
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr15-review-fix
+          path: ${{ runner.temp }}/pr15
+      - name: Update only the reviewed PR branch
+        env:
+          EXPECTED_BASE: ${{ needs.prepare.outputs.base_sha }}
+          VALIDATED_HEAD: ${{ needs.prepare.outputs.head_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = 36048b3e8d22dfaa7f2beffd22cd048b7837b71d
+          git fetch "$RUNNER_TEMP/pr15/pr15.bundle" HEAD
+          test "$(git rev-parse FETCH_HEAD)" = "$VALIDATED_HEAD"
+          git merge-base --is-ancestor "$EXPECTED_BASE" "$VALIDATED_HEAD"
+          git push --force-with-lease=refs/heads/feat/guard-version-and-compose-commands:36048b3e8d22dfaa7f2beffd22cd048b7837b71d origin "$VALIDATED_HEAD:refs/heads/feat/guard-version-and-compose-commands"
