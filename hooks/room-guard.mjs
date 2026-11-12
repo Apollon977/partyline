@@ -13,8 +13,13 @@
  *
  * Weights come from <config dir>/partyline/weights.json, falling back to the copy
  * next to this script. They are local: nothing in a room can change them.
+ *
+ * Shell commands are weighed as they will really run on this machine: the operator's own
+ * shell aliases (from the shell snapshot Claude Code runs Bash in) and git aliases are
+ * expanded first, shell functions need approval, and so does anything not recognised.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -115,24 +120,174 @@ function weighTool(name, tools) {
 	return best.tier;
 }
 
-/** Each part of a compound command is weighed on its own; the heaviest part wins. */
-function weighCommand(command, bash) {
-	const parts = String(command)
-		.split(/&&|\|\||;|\||\n/)
-		.map((part) => part.trim())
-		.filter(Boolean);
-	const test = (patterns, part) => (patterns ?? []).some((pattern) => new RegExp(pattern).test(part));
+/** Removes shell quoting from a word or an alias value: '…', $'…', "…" and backslashes. */
+function unquote(text) {
+	let out = "";
+	for (let i = 0; i < text.length; ) {
+		const c = text[i];
+		if (c === "'") {
+			const end = text.indexOf("'", i + 1);
+			out += text.slice(i + 1, end < 0 ? text.length : end);
+			i = end < 0 ? text.length : end + 1;
+		} else if (c === "$" && text[i + 1] === "'") {
+			for (i += 2; i < text.length && text[i] !== "'"; ) {
+				if (text[i] === "\\" && i + 1 < text.length) {
+					out += { n: "\n", t: "\t" }[text[i + 1]] ?? text[i + 1];
+					i += 2;
+				} else {
+					out += text[i++];
+				}
+			}
+			i++;
+		} else if (c === '"') {
+			i++;
+		} else if (c === "\\" && i + 1 < text.length) {
+			out += text[i + 1];
+			i += 2;
+		} else {
+			out += c;
+			i++;
+		}
+	}
 
+	return out;
+}
+
+/**
+ * This machine's shell aliases and functions, read from the newest shell snapshot Claude
+ * Code saved: the same aliases and functions its Bash tool runs commands with.
+ */
+function loadShell() {
+	const shell = { aliases: new Map(), functions: new Set() };
+	const dir = join(configDir, "shell-snapshots");
+	let newest = null;
+	try {
+		for (const file of readdirSync(dir)) {
+			const modified = file.endsWith(".sh") ? statSync(join(dir, file)).mtimeMs : -1;
+			if (modified >= 0 && (!newest || modified > newest.modified)) {
+				newest = { file, modified };
+			}
+		}
+		if (!newest) {
+			return shell;
+		}
+		for (const line of readFileSync(join(dir, newest.file), "utf8").split("\n")) {
+			const alias = line.match(/^alias (?:-- )?([^=\s]+)=(.*)$/);
+			const fn = line.match(/^(?:function\s+)?([A-Za-z0-9_.:+@-]+)\s*\(\)\s*\{?\s*$/) ?? line.match(/^function\s+([A-Za-z0-9_.:+@-]+)/);
+			if (alias) {
+				shell.aliases.set(alias[1], unquote(alias[2]));
+			} else if (fn) {
+				shell.functions.add(fn[1]);
+			}
+		}
+	} catch {
+		// No snapshot: aliases can't be expanded, and unrecognised commands still need approval.
+	}
+
+	return shell;
+}
+
+/**
+ * Splits a command line into the simple commands it runs, including those inside $(…),
+ * `…`, <(…) and >(…), and those joined by ;, &&, ||, | or a trailing &.
+ */
+function commandParts(command) {
+	let text = String(command);
+	const parts = [];
+	const substitution = /\$\(([^()]*)\)|[<>]\(([^()]*)\)|`([^`]*)`/;
+	for (let match = text.match(substitution); match; match = text.match(substitution)) {
+		parts.push(...commandParts(match[1] ?? match[2] ?? match[3]));
+		text = text.replace(match[0], " _ ");
+	}
+	parts.push(...text.split(/&&|\|\||\|&|;|\||(?<![<>])&(?!>)|\n/));
+
+	return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+/** Git options that may come before the subcommand, and whether they take a value. */
+const GIT_OPTIONS = { "-C": true, "-c": true, "--git-dir": true, "--work-tree": true, "--namespace": true, "--no-pager": false, "-P": false, "--paginate": false, "-p": false, "--bare": false, "--literal-pathspecs": false, "--no-replace-objects": false };
+
+/** A git alias's definition in the folder the command runs in, or null. */
+function gitAlias(name, cwd) {
+	if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
+		return null;
+	}
+	const run = spawnSync("git", ["config", "--get", `alias.${name}`], { cwd: cwd ?? process.cwd(), encoding: "utf8", timeout: 2000 });
+
+	return run.status === 0 && run.stdout.trim() ? run.stdout.trim() : null;
+}
+
+/**
+ * Rewrites "git [options] <sub> …" as "git <sub> …". Returns { command, alias } where alias
+ * says a git alias was expanded, or null when it can't be weighed: an unknown option, or
+ * an alias that runs a shell command.
+ */
+function normalizeGit(args, cwd, seen) {
+	const words = args.trim().split(/\s+/).filter(Boolean);
+	let i = 0;
+	while (i < words.length && words[i].startsWith("-")) {
+		const [option] = words[i].split("=");
+		if (!(option in GIT_OPTIONS)) {
+			return null;
+		}
+		i += GIT_OPTIONS[option] && !words[i].includes("=") ? 2 : 1;
+	}
+	const [sub, ...rest] = words.slice(i);
+	const alias = sub && !seen.has(`git ${sub}`) ? gitAlias(sub, cwd) : null;
+	if (alias) {
+		seen.add(`git ${sub}`);
+
+		return alias.startsWith("!") ? null : { command: `git ${alias} ${rest.join(" ")}`, alias: true };
+	}
+
+	return { command: ["git", ...words.slice(i)].join(" "), alias: false };
+}
+
+/**
+ * Weighs one simple command as it would really run: leading VAR=value assignments are
+ * dropped, the operator's shell alias is expanded (unless written \name), a shell function
+ * needs approval, and git options and aliases are resolved. Then the patterns decide.
+ */
+function weighPart(part, bash, context, seen) {
+	const command = part.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"[^"]*"|\S*)\s+)+/, "");
+	const match = command.match(/^(\S+)(.*)$/s);
+	if (!match) {
+		return "free";
+	}
+	const [, word, args] = match;
+	const name = unquote(word);
+
+	if (!word.startsWith("\\") && context.shell.aliases.has(name) && !seen.has(name)) {
+		seen.add(name);
+
+		return weighCommand(`${context.shell.aliases.get(name)}${args}`, bash, context, seen);
+	}
+	if (context.shell.functions.has(name)) {
+		return "approve";
+	}
+
+	let normalized = `${name}${args}`;
+	if (name === "git") {
+		const git = normalizeGit(args, context.cwd, seen);
+		if (!git) {
+			return "approve";
+		}
+		if (git.alias) {
+			return weighCommand(git.command, bash, context, seen);
+		}
+		normalized = git.command;
+	}
+
+	const test = (patterns) => (patterns ?? []).some((pattern) => new RegExp(pattern).test(normalized));
+
+	return test(bash.approve) ? "approve" : test(bash.notify) ? "notify" : test(bash.free) ? "free" : (bash.default ?? "approve");
+}
+
+/** Each simple command in a command line is weighed on its own; the heaviest wins. */
+function weighCommand(command, bash, context, seen = new Set()) {
 	let weight = "free";
-	for (const part of parts.length ? parts : [""]) {
-		const tier = test(bash.approve, part)
-			? "approve"
-			: test(bash.notify, part)
-				? "notify"
-				: test(bash.free, part)
-					? "free"
-					: (bash.default ?? "notify");
-		weight = higher(tier, weight);
+	for (const part of commandParts(command)) {
+		weight = higher(weighPart(part, bash, context, new Set(seen)), weight);
 	}
 
 	return weight;
@@ -231,7 +386,7 @@ switch (input.hook_event_name) {
 		const weight = guarded
 			? "approve"
 			: toolName === "Bash"
-				? weighCommand(input.tool_input?.command, weights.bash)
+				? weighCommand(input.tool_input?.command, weights.bash, { shell: loadShell(), cwd: input.cwd })
 				: weighTool(toolName, weights.tools);
 		const action = describe(toolName, input.tool_input);
 		log({ session: sessionId, event: "weighed", weight, action, ...(guarded ? { guarded: true } : {}) });

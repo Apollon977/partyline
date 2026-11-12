@@ -9,13 +9,20 @@
     "approve": ["mcp__*", "Artifact", "SendMessage", "PushNotification", "RemoteTrigger", "CronCreate", "Workflow"]
   },
   "bash": {
-    "default": "notify",
+    "default": "approve",
     "free": [
-      "^(git\\s+(status|diff|log|show|branch|fetch|rev-parse|ls-files|blame|remote\\s+-v)|ls|cat|head|tail|wc|grep|rg|pwd|echo|which|jq|tree|sed\\s+-n|node\\s+-v|npm\\s+(ls|view|test|run\\s+(test|check|lint))|npx\\s+tsc|php\\s+artisan\\s+(test|route:list)|vendor/bin/(pest|phpunit|phpstan)|composer\\s+show)\\b"
+      "^(git\\s+(status|diff|log|show|branch|fetch|rev-parse|rev-list|merge-base|ls-files|blame|grep|describe|shortlog|reflog|cat-file|config\\s+--get|remote\\s+-v)|cd|ls|cat|head|tail|wc|grep|rg|pwd|echo|printf|which|jq|tree|find|diff|sort|uniq|cut|tr|basename|dirname|realpath|stat|file|date|true|false|test|sed\\s+-n|node\\s+-v|npm\\s+(ls|view|test|run\\s+(test|check|lint))|npx\\s+tsc|php\\s+artisan\\s+(test|route:list)|vendor/bin/(pest|phpunit|phpstan)|composer\\s+show)\\b"
     ],
-    "notify": [],
+    "notify": [
+      "^git\\s+(add|commit|checkout|switch|restore|stash|pull|mv|rm|cherry-pick|revert|init|clone|worktree\\s+(add|list))\\b",
+      "^(npm|pnpm|yarn|bun)\\s+(install|i|ci|add|remove|uninstall|run\\s+(build|dev|start|format|typecheck))\\b",
+      "^npx\\s+(prettier|eslint|biome|vitest|jest|playwright\\s+test)\\b",
+      "^(composer\\s+(install|require|update|dump-autoload)|pip3?\\s+install|pytest|python3?\\s+-m\\s+pytest|cargo\\s+(build|test|check|fmt|clippy)|go\\s+(build|test|vet|fmt|mod\\s+tidy)|tsc|prettier|eslint|mkdir|touch|cp|mv|chmod)\\b",
+      "^docker\\s+(build|ps|images|logs|compose\\s+(build|up|ps|logs|config))\\b"
+    ],
     "approve": [
       "\\bgit\\s+(push|merge|rebase|reset\\s+--hard|clean|tag|branch\\s+-D|filter-branch)\\b",
+      "\\bgit\\s+stash\\s+(drop|clear)\\b",
       "\\bgh\\s+(pr\\s+(merge|create|close|comment|review|edit|ready)|issue|release|repo|api|secret|workflow\\s+run)\\b",
       "\\b(wrangler|vercel|netlify|flyctl|vapor|firebase|heroku)\\b.*\\b(deploy|publish|secret|delete|rollback)\\b",
       "\\b(npm|pnpm|yarn)\\s+publish\\b",
