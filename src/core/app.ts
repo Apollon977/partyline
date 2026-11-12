@@ -98,7 +98,7 @@ function text(value: string) {
 }
 
 function createServer(rooms: Rooms, { team, name }: Member, origin: string): McpServer {
-	const server = new McpServer({ name: "partyline", version: "0.4.0" });
+	const server = new McpServer({ name: "partyline", version: "0.4.1" });
 
 	server.registerTool(
 		"create_room",
