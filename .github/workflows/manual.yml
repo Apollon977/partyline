@@ -69,9 +69,9 @@ jobs:
           old_test = git_text('show', original + ':' + paths[0])
           start = old_test.index('test("version changes and Compose shutdowns have explicit approve weights"')
           end = old_test.index(newline + 'test(', start + 5)
-          block = old_test[start:end]
+          block = old_test[start:end].replace('docker compose up -d', 'docker compose build')
           assert 'weights.bash.default = "free"' in block
-          imports = 'mkdtempSync, writeFileSync'
+          imports = 'mkdtempSync, readFileSync, writeFileSync'
           assert files[paths[0]].count(imports) == 1
           files[paths[0]] = files[paths[0]].replace(imports, 'mkdtempSync, readFileSync, rmSync, writeFileSync', 1)
           anchor = 'test("shell functions and unrecognised commands need approval"'
@@ -80,7 +80,7 @@ jobs:
           current_weights = json.loads(files[paths[1]])
           old_weights = json.loads(git_text('show', original + ':' + paths[1]))
           approve = current_weights['bash']['approve']
-          extra = [pattern for pattern in old_weights['bash']['approve'] if pattern not in approve]
+          extra = [pattern for pattern in old_weights['bash']['approve'] if ('version' in pattern or 'compose' in pattern) and pattern not in approve]
           assert len(extra) == 2 and 'version' in extra[0] and 'compose' in extra[1]
           publish_index = next(index for index, pattern in enumerate(approve) if 'publish' in pattern)
           approve[publish_index + 1:publish_index + 1] = extra
